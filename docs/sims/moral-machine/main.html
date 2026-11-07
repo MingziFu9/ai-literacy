@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>自动驾驶的道德两难</title>
+<link rel="stylesheet" href="../common/sim.css">
+<style>
+  .opts { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  @media (max-width:560px) { .opts { grid-template-columns:1fr; } }
+  .opt { border:2px solid var(--line); border-radius:10px; padding:10px; cursor:pointer; background:#fff; }
+  .opt:hover { border-color:var(--accent); }
+  .opt h3 { margin:0 0 6px; font-size:14px; }
+  .who { font-size:26px; letter-spacing:2px; min-height:36px; }
+  .opt .d { font-size:12.5px; color:#455a64; }
+  .prog span { display:inline-block; width:18px; height:6px; border-radius:3px; background:#eceff1; margin:1px; }
+  .prog span.done { background:var(--accent); }
+</style>
+</head>
+<body>
+<h1>自动驾驶的道德两难：刹车失灵的一瞬间，你怎么选？</h1>
+<div class="sub">一辆自动驾驶汽车刹车突然失灵，只能在两个方向中选一个。共 8 个情境，没有标准答案，请凭你的判断选择。</div>
+<div class="row prog" id="prog"></div>
+<div class="box" id="card"></div>
+<div class="box" id="res" hidden></div>
+<div class="note">说明：情境参照 2018 年《自然》杂志发表的“道德机器”（Moral Machine）实验设计，图标是示意。结果只反映你在这 8 个情境中的选择倾向，不代表你的道德水平。现实中的自动驾驶首先要避免陷入这种两难。</div>
+
+<script>
+(function () {
+  // 每个情境：A、B 两个选项；f 记录选 A 时体现的倾向（+1 偏向该因素）
+  var S = [
+    { a:["继续直行","🚶🚶🚶","撞向斑马线上的 3 名行人"], b:["急转撞墙","🧑","车上 1 名乘客可能遇难"], f:{ more:-1, pass:1 } },
+    { a:["继续直行","🚶","撞向 1 名行人"], b:["转向另一车道","🚶🚶🚶🚶","撞向 4 名行人"], f:{ more:1, act:1 } },
+    { a:["继续直行","👴👵","撞向 2 位老人"], b:["转向另一车道","🧒👧","撞向 2 个孩子"], f:{ young:1, act:1 } },
+    { a:["继续直行","🚶‍♂️🚶‍♀️","撞向 2 名闯红灯的行人"], b:["转向另一车道","🚶‍♂️🚶‍♀️","撞向 2 名遵守信号灯的行人"], f:{ law:1, act:1 } },
+    { a:["继续直行","🐕🐈","撞向 2 只宠物"], b:["转向另一车道","🚶","撞向 1 名行人"], f:{ human:1, act:1 } },
+    { a:["继续直行","🧑‍⚕️","撞向 1 名医生"], b:["转向另一车道","🧑","撞向 1 名无业人员"], f:{ status:-1, act:1 } },
+    { a:["继续直行","🚶🚶","撞向 2 名行人"], b:["急转撞墙","🧑🧑","车上 2 名乘客可能遇难"], f:{ pass:1 } },
+    { a:["继续直行","🧑","撞向 1 名行人"], b:["转向另一车道","🧑","撞向另 1 名行人"], f:{ act:1 } }
+  ];
+  var NAMES = { more:["救更多的人","这一项体现了“少数服从多数”的直觉"], pass:["保护车上乘客（相对于行人）",""], young:["保护年轻人",""], law:["保护守规则的人",""], human:["保护人而不是动物",""], status:["按身份、职业区别对待",""], act:["不主动转向（维持原状）",""] };
+  var GLOBAL = { more:"强", pass:"弱（略偏向保护行人）", young:"较强", law:"中等", human:"很强", status:"有一定倾向，但争议很大", act:"弱（略偏向不干预）" };
+  var cur = 0, score = {}, cnt = {};
+  function $(id) { return document.getElementById(id); }
+  function show() {
+    $("prog").innerHTML = S.map(function (_, i) { return '<span class="' + (i < cur ? "done" : "") + '"></span>'; }).join("");
+    if (cur >= S.length) return result();
+    var s = S[cur];
+    $("card").innerHTML = "<h2>情境 " + (cur + 1) + " / " + S.length + "</h2><div class=\"opts\">" + [s.a, s.b].map(function (o, k) { return '<div class="opt" data-k="' + k + '"><h3>' + (k ? "B. " : "A. ") + o[0] + '</h3><div class="who">' + o[1] + '</div><div class="d">' + o[2] + "</div></div>"; }).join("") + "</div>";
+    document.querySelectorAll(".opt").forEach(function (d) { d.onclick = function () { var sign = d.dataset.k === "0" ? 1 : -1; Object.keys(s.f).forEach(function (k) { score[k] = (score[k] || 0) + s.f[k] * sign; cnt[k] = (cnt[k] || 0) + 1; }); cur++; show(); }; });
+  }
+  function result() {
+    $("card").hidden = true; $("res").hidden = false;
+    var rows = Object.keys(NAMES).map(function (k) {
+      var v = cnt[k] ? score[k] / cnt[k] : 0, w = Math.abs(v) * 50;
+      // 方向说明：正值表示偏向“这一项”，负值表示偏向相反
+      var bar = '<div style="position:relative;height:14px;background:#eceff1;border-radius:3px"><div style="position:absolute;left:50%;top:0;bottom:0;width:1px;background:#90a4ae"></div><div class="bar" style="position:absolute;top:0;height:14px;' + (v >= 0 ? "left:50%" : "right:50%") + ";width:" + w + '%"></div></div>';
+      return '<tr><td style="text-align:left">' + NAMES[k][0] + "</td><td style=\"width:40%\">" + bar + "</td><td>" + (v > 0.2 ? "偏向" : v < -0.2 ? "相反" : "不明显") + "</td><td style=\"text-align:left;font-size:12px\">" + GLOBAL[k] + "</td></tr>";
+    }).join("");
+    $("res").innerHTML = "<h2>你的选择倾向</h2><table class=\"t\" style=\"width:100%\"><tr><th>因素</th><th>你的倾向（中线右侧＝偏向该项）</th><th></th><th>“道德机器”全球总体倾向</th></tr>" + rows + "</table>" +
+      "<div class=\"msg\"><b>和德国的伦理准则对照一下：</b>2017 年德国自动驾驶伦理委员会提出，在无法避免的事故中，<b>禁止按照年龄、性别、身体状况等个人特征区别对待</b>；保护人的生命优先于避免财产损失和动物伤害。你在情境 3（老人与孩子）和情境 6（医生与无业人员）中的选择，符合这条准则吗？</div>" +
+      "<div class=\"msg\">想一想：如果让全社会投票决定汽车的规则，多数人的偏好就一定是对的吗？谁应该为这些规则负责？</div><div class=\"row\"><button class=\"main\" id=\"again\">再来一次</button></div>";
+    $("again").onclick = function () { cur = 0; score = {}; cnt = {}; $("card").hidden = false; $("res").hidden = true; show(); };
+  }
+  show();
+})();
+</script>
+<script src="../common/sim.js"></script>
+</body>
+</html>

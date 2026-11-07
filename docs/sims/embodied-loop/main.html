@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>机器人的三层控制</title>
+<link rel="stylesheet" href="../common/sim.css">
+<style>
+  .wrap { display:grid; grid-template-columns:minmax(0,1.2fr) 1fr; gap:10px; }
+  @media (max-width:660px) { .wrap { grid-template-columns:1fr; } }
+  svg.room { width:100%; border:1px solid var(--line); border-radius:8px; cursor:pointer; }
+  .layer { border-left:4px solid var(--line); padding:4px 8px; margin:6px 0; font-size:13px; }
+  .layer.act { border-left-color:var(--accent); background:var(--soft); }
+  .layer h3 { margin:0; font-size:13px; }
+  .tasks span { display:inline-block; padding:1px 6px; margin:2px; border-radius:10px; background:#eceff1; font-size:12px; }
+  .tasks span.doing { background:var(--accent); color:#fff; } .tasks span.done { background:#c8e6c9; }
+  svg.force { width:100%; height:90px; }
+</style>
+</head>
+<body>
+<h1>机器人的三层控制：大脑想、小脑算、脊髓动</h1>
+<div class="sub">给机器人下一条指令，看三层控制怎样分工。点房间里的空地可以放置或移除障碍物（灰色方块）。</div>
+<div class="row"><span class="lbl">指令：</span><button data-o="cup" class="on">把桌上的水杯拿给我</button><button data-o="egg">把桌上的鸡蛋拿给我</button>
+  <label style="margin-left:8px"><input type="checkbox" id="fb" checked> 脊髓的力反馈</label></div>
+<div class="row"><button class="main" id="go">开始执行</button><button id="reset">重置</button><button id="clear">清除障碍物</button></div>
+<div class="wrap">
+  <svg class="room" id="room" viewBox="0 0 360 240"></svg>
+  <div>
+    <div class="layer" id="L1"><h3>🧠 大脑：视觉语言大模型（理解指令、拆解任务）</h3><div class="tasks" id="tasks"></div></div>
+    <div class="layer" id="L2"><h3>⚙️ 小脑：路径规划（避开障碍）</h3><div id="path"></div></div>
+    <div class="layer" id="L3"><h3>⚡ 脊髓：力控制（毫秒级反馈）</h3><svg class="force" id="force" viewBox="0 0 300 90"></svg><div id="fmsg"></div></div>
+  </div>
+</div>
+<div class="msg" id="msg"></div>
+<div class="note">说明：这是一个简化的演示。“大脑”的任务拆解是预先写好的；“小脑”用广度优先搜索在格子地图上找最短路线；“脊髓”用一个简单的比例反馈控制握力。真实机器人的每一层都复杂得多。</div>
+
+<script>
+(function () {
+  var W = 12, H = 8, S = 30, start = [1, 6], table = [10, 1], user = [1, 1];
+  var obs = {}, obj = "cup", timer = null;
+  var OBJ = { cup:{ n:"水杯", ic:"🥤", slip:3, crack:99, target:5 }, egg:{ n:"鸡蛋", ic:"🥚", slip:1, crack:3, target:2 } };
+  [[5,3],[5,4],[5,5],[6,5]].forEach(function (c) { obs[c] = 1; });
+  function $(id) { return document.getElementById(id); }
+  function bfs(a, b) {
+    var q = [a], prev = {}, seen = {}; seen[a] = 1;
+    while (q.length) { var c = q.shift(); if (c[0] === b[0] && c[1] === b[1]) { var p = [c]; while (prev[c]) { c = prev[c]; p.unshift(c); } return p; }
+      [[1,0],[-1,0],[0,1],[0,-1]].forEach(function (d) { var n = [c[0] + d[0], c[1] + d[1]]; if (n[0] < 0 || n[1] < 0 || n[0] >= W || n[1] >= H || seen[n] || obs[n]) return; seen[n] = 1; prev[n] = c; q.push(n); }); }
+    return null;
+  }
+  var robot = start.slice(), carry = false, pathA = null, pathB = null, trail = [];
+  function draw() {
+    var s = "";
+    for (var x = 0; x < W; x++) for (var y = 0; y < H; y++) s += '<rect x="' + x * S + '" y="' + y * S + '" width="' + S + '" height="' + S + '" fill="' + (obs[[x, y]] ? "#90a4ae" : "#fafafa") + '" stroke="#eceff1"/>';
+    trail.forEach(function (p, i) { if (i) s += '<line x1="' + (trail[i - 1][0] * S + 15) + '" y1="' + (trail[i - 1][1] * S + 15) + '" x2="' + (p[0] * S + 15) + '" y2="' + (p[1] * S + 15) + '" stroke="#3f51b5" stroke-width="3" stroke-dasharray="4 3"/>'; });
+    s += '<rect x="' + (table[0] * S - 6) + '" y="' + (table[1] * S - 6) + '" width="' + (S + 12) + '" height="' + (S + 12) + '" fill="#bcaaa4" rx="4"/><text x="' + (table[0] * S + 15) + '" y="' + (table[1] * S + 50) + '" font-size="11" text-anchor="middle">桌子</text>';
+    if (!carry) s += '<text x="' + (table[0] * S + 15) + '" y="' + (table[1] * S + 21) + '" font-size="18" text-anchor="middle">' + OBJ[obj].ic + "</text>";
+    s += '<text x="' + (user[0] * S + 15) + '" y="' + (user[1] * S + 22) + '" font-size="20" text-anchor="middle">🧑</text>';
+    s += '<text x="' + (robot[0] * S + 15) + '" y="' + (robot[1] * S + 22) + '" font-size="20" text-anchor="middle">🤖</text>';
+    if (carry) s += '<text x="' + (robot[0] * S + 26) + '" y="' + (robot[1] * S + 12) + '" font-size="13">' + OBJ[obj].ic + "</text>";
+    $("room").innerHTML = s;
+  }
+  var TASKS = ["走到桌前", "找到目标", "伸手", "抓取", "走回主人身边", "递出"];
+  function tasks(cur, fail) { $("tasks").innerHTML = TASKS.map(function (t, i) { return '<span class="' + (i < cur ? "done" : i === cur ? "doing" : "") + '"' + (fail && i === cur ? ' style="background:#e53935"' : "") + ">" + (i + 1) + "." + t.replace("目标", OBJ[obj].n) + "</span>"; }).join(""); }
+  function act(l) { ["L1","L2","L3"].forEach(function (id) { $(id).classList.toggle("act", id === l); }); }
+  function forcePlot(arr, o) {
+    var s = '<rect width="300" height="90" fill="#fff"/>', y = function (f) { return 85 - f * 10; };
+    s += '<rect x="0" y="' + y(o.slip) + '" width="300" height="' + (85 - y(o.slip)) + '" fill="#fff3e0"/><text x="296" y="' + (y(o.slip) + 11) + '" font-size="10" text-anchor="end" fill="#ef6c00">太松会滑落</text>';
+    if (o.crack < 8) s += '<rect x="0" y="0" width="300" height="' + y(o.crack) + '" fill="#ffebee"/><text x="296" y="10" font-size="10" text-anchor="end" fill="#e53935">太紧会捏碎</text>';
+    s += '<line x1="0" y1="' + y(o.target) + '" x2="300" y2="' + y(o.target) + '" stroke="#43a047" stroke-dasharray="4 3"/>';
+    s += '<polyline fill="none" stroke="#3f51b5" stroke-width="2" points="' + arr.map(function (f, i) { return (i * 300 / 40) + "," + y(f); }).join(" ") + '"/>';
+    $("force").innerHTML = s;
+  }
+  function reset() {
+    if (timer) { clearInterval(timer); timer = null; }
+    robot = start.slice(); carry = false; trail = []; tasks(-1); act(""); $("path").textContent = "等待指令。"; $("fmsg").textContent = ""; $("msg").textContent = ""; forcePlot([], OBJ[obj]); draw(); $("go").disabled = false;
+  }
+  function run() {
+    $("go").disabled = true; var q = [], o = OBJ[obj];
+    q.push(function () { act("L1"); tasks(0); $("msg").innerHTML = "大脑把“把桌上的" + o.n + "拿给我”拆成 6 个子任务，交给下层执行。大脑不直接控制电机。"; });
+    q.push(function () {
+      act("L2"); var p = bfs(robot, [table[0] - 1, table[1]]);
+      if (!p) { tasks(0, true); $("path").innerHTML = '<span class="bad">找不到通往桌子的路！</span>'; $("msg").innerHTML = "小脑向大脑报告“路被堵死了”。大脑重新规划：停下来，请主人帮忙挪开障碍物。（试试移除一些障碍物再执行。）"; q.length = 0; $("go").disabled = false; return; }
+      pathA = p; $("path").innerHTML = "规划出一条 " + (p.length - 1) + " 步的最短路线，绕开了障碍物。";
+      for (var i = p.length - 1; i >= 0; i--) (function (c) { q.unshift(function () { robot = c; trail.push(c); draw(); }); })(p[i]);
+    });
+    q.push(function () { act("L1"); tasks(1); $("msg").textContent = "摄像头画面交给视觉模型：在桌上找到了" + o.n + "。"; });
+    q.push(function () { tasks(2); act("L2"); $("path").textContent = "计算机械臂各关节的角度，伸向" + o.n + "。"; });
+    q.push(function () {
+      tasks(3); act("L3"); var fb = $("fb").checked, f = 0, arr = [], kp = 0.35;
+      for (var i = 0; i <= 40; i++) { f = fb ? f + kp * (o.target - f) : Math.min(6, f + 0.6); arr.push(f); }
+      forcePlot(arr, o); var fin = arr[arr.length - 1];
+      if (fin >= o.crack) { $("fmsg").innerHTML = '<span class="bad">握力达到 ' + fin.toFixed(1) + " 牛，" + o.n + "被捏碎了！</span>"; $("msg").innerHTML = "关掉力反馈后，脊髓只会按固定的力量“用力抓”，对水杯没问题，对鸡蛋就是灾难。底层的实时反馈非常关键。"; q.length = 0; tasks(3, true); $("go").disabled = false; return; }
+      if (fin < o.slip) { $("fmsg").innerHTML = '<span class="bad">握力不够，' + o.n + "滑落了。</span>"; q.length = 0; tasks(3, true); $("go").disabled = false; return; }
+      $("fmsg").innerHTML = (fb ? "力传感器每隔几毫秒反馈一次，握力平稳地停在约 " : "按固定力量抓取，握力约 ") + fin.toFixed(1) + " 牛（绿色虚线是目标）。"; carry = true; draw();
+    });
+    q.push(function () {
+      tasks(4); act("L2"); var p = bfs(robot, [user[0] + 1, user[1]]);
+      if (!p) { $("path").innerHTML = '<span class="bad">回去的路被堵住了。</span>'; q.length = 0; $("go").disabled = false; return; }
+      $("path").innerHTML = "回程规划了 " + (p.length - 1) + " 步。";
+      for (var i = p.length - 1; i >= 0; i--) (function (c) { q.unshift(function () { robot = c; trail.push(c); draw(); }); })(p[i]);
+    });
+    q.push(function () { tasks(6); act("L1"); $("msg").innerHTML = '<span class="ok">任务完成：' + o.n + "已经递到主人手里。</span> 试试在路上放更多障碍物，或者换成鸡蛋、再关掉力反馈。"; $("go").disabled = false; });
+    timer = setInterval(function () { if (!q.length) { clearInterval(timer); timer = null; return; } q.shift()(); }, 260);
+  }
+  $("room").onclick = function (e) {
+    if (timer) return; var r = this.getBoundingClientRect(), x = Math.floor((e.clientX - r.left) / r.width * W), y = Math.floor((e.clientY - r.top) / r.height * H), k = [x, y];
+    if ((x === robot[0] && y === robot[1]) || (x === table[0] && y === table[1]) || (x === user[0] && y === user[1])) return;
+    if (obs[k]) delete obs[k]; else obs[k] = 1; reset();
+  };
+  $("go").onclick = function () { reset(); run(); };
+  $("reset").onclick = reset;
+  $("clear").onclick = function () { obs = {}; reset(); };
+  $("fb").onchange = reset;
+  document.querySelectorAll("[data-o]").forEach(function (b) { b.onclick = function () { obj = b.dataset.o; document.querySelectorAll("[data-o]").forEach(function (x) { x.classList.toggle("on", x === b); }); reset(); }; });
+  reset();
+})();
+</script>
+<script src="../common/sim.js"></script>
+</body>
+</html>

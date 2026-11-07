@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>招聘模型偏见审计</title>
+<link rel="stylesheet" href="../common/sim.css">
+<style>
+  .steps button { margin:2px; }
+  table.cm td { width:5.5em; }
+  td.tp { background:#c5cae9; } td.fn { background:#ffcdd2; } td.fp { background:#ffe0b2; } td.tn { background:#e8eaf6; }
+  .gap { font-size:18px; font-weight:bold; }
+</style>
+</head>
+<body>
+<h1>招聘模型偏见审计：删掉“性别”这一列，就公平了吗？</h1>
+<div class="sub">模拟数据：1000 位应聘者，男女各约一半，编程能力 0～10 分（男女分布相同）。历史录用记录里，名校有加分，<b>同样条件下男性也更容易被录用</b>；名校毕业生中男性略多（男 60%，女 40%）。公司用这些记录训练了一个<b>不看性别</b>的模型。</div>
+<div class="row steps" id="steps"></div>
+<div class="box" id="out"></div>
+<div class="note">说明：数据是用固定随机种子生成的模拟数据，和 8.6.1 节“深入一步”的 Python 代码思路相同（数值会略有差别）。这里把“编程能力 ≥ 7 分”当作“真正有能力”，用来计算漏报和误报。模型是用梯度下降训练的逻辑回归。</div>
+
+<script>
+(function () {
+  function $(id) { return document.getElementById(id); }
+  var seed = 42; function rnd() { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; }
+  function gauss() { var u = rnd() || 1e-9, v = rnd(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); }
+  var D = [];
+  for (var i = 0; i < 1000; i++) {
+    var g = rnd() < 0.5 ? 1 : 0, sch = rnd() < (g ? 0.6 : 0.4) ? 1 : 0, cod = Math.floor(rnd() * 11), nz = gauss();
+    D.push({ g:g, s:sch, c:cod, hist:(cod * 0.6 + sch * 2 + g * 1 + nz > 7) ? 1 : 0, fair:(cod * 0.6 + nz > 4.6) ? 1 : 0, q:cod >= 7 ? 1 : 0 });
+  }
+  function train(feats, label) {
+    var w = feats.map(function () { return 0; }), b = 0, lr = 1.0;
+    for (var it = 0; it < 3000; it++) {
+      var gw = w.map(function () { return 0; }), gb = 0;
+      D.forEach(function (d) { var z = b; feats.forEach(function (f, k) { z += w[k] * f(d); }); var p = 1 / (1 + Math.exp(-z)), e = p - d[label]; feats.forEach(function (f, k) { gw[k] += e * f(d); }); gb += e; });
+      w = w.map(function (v, k) { return v - lr * gw[k] / D.length; }); b -= lr * gb / D.length;
+    }
+    return function (d) { var z = b; feats.forEach(function (f, k) { z += w[k] * f(d); }); return 1 / (1 + Math.exp(-z)); };
+  }
+  var fC = function (d) { return d.c / 10; }, fS = function (d) { return d.s; };
+  var M = { base:train([fC, fS], "hist"), noSchool:train([fC], "hist"), relabel:train([fC, fS], "fair") };
+  function preds(kind) {
+    if (kind === "group") { // 分组门槛：给女性更低的门槛，使两组录用率接近
+      var p = D.map(function (d) { return M.base(d); }), rate = function (g, t) { var n = 0, h = 0; D.forEach(function (d, i) { if (d.g === g) { n++; if (p[i] > t) h++; } }); return h / n; };
+      var tm = 0.5, rm = rate(1, tm), best = 0.5, diff = 1;
+      for (var t = 0.05; t <= 0.5; t += 0.005) { var df = Math.abs(rate(0, t) - rm); if (df < diff) { diff = df; best = t; } }
+      return D.map(function (d, i) { return p[i] > (d.g ? tm : best) ? 1 : 0; });
+    }
+    return D.map(function (d) { return M[kind](d) > 0.5 ? 1 : 0; });
+  }
+  function stats(pr) {
+    var r = { 1:{ n:0, h:0, tp:0, fn:0, fp:0, tn:0 }, 0:{ n:0, h:0, tp:0, fn:0, fp:0, tn:0 } }, ok = 0;
+    D.forEach(function (d, i) { var s = r[d.g], p = pr[i]; s.n++; s.h += p; if (d.q && p) s.tp++; else if (d.q) s.fn++; else if (p) s.fp++; else s.tn++; if (p === d.q) ok++; });
+    r.acc = ok / D.length; return r;
+  }
+  function pct(x) { return (x * 100).toFixed(1) + "%"; }
+  function cm(s, t) { return "<b>" + t + "</b><table class=\"t cm\"><tr><th></th><th>有能力</th><th>能力不足</th></tr><tr><th>录用</th><td class=\"tp\">" + s.tp + "</td><td class=\"fp\">" + s.fp + "<br><small>误报</small></td></tr><tr><th>拒绝</th><td class=\"fn\">" + s.fn + "<br><small>漏报</small></td><td class=\"tn\">" + s.tn + "</td></tr></table><div class=\"note\">有能力却被拒绝：" + pct(s.fn / (s.tp + s.fn)) + "</div>"; }
+  var STEPS = [
+    ["1. 看历史数据", function () {
+      var bins = [[0,3],[4,6],[7,10]], rows = "<tr><th>编程能力</th><th>男性录用率</th><th>女性录用率</th></tr>";
+      bins.forEach(function (b) { var r = [0,1].map(function (g) { var n = 0, h = 0; D.forEach(function (d) { if (d.g === g && d.c >= b[0] && d.c <= b[1]) { n++; h += d.hist; } }); return h / n; }); rows += "<tr><td>" + b[0] + "～" + b[1] + " 分</td><td>" + pct(r[1]) + "</td><td>" + pct(r[0]) + "</td></tr>"; });
+      return "<h2>历史录用记录</h2><table class=\"t\">" + rows + "</table><div class=\"msg\">编程能力相同的情况下，男性的录用率明显更高。这就是模型要学习的“标准答案”，它本身就带有偏见。</div>"; }],
+    ["2. 训练不看性别的模型", function () {
+      var s = stats(preds("base"));
+      return "<h2>模型的录用率（训练时没有使用性别）</h2><div class=\"barrow\"><span>男性</span><div><div class=\"bar\" style=\"width:" + s[1].h / s[1].n * 200 + "%\"></div></div><span class=\"v\">" + pct(s[1].h / s[1].n) + "</span></div><div class=\"barrow\"><span>女性</span><div><div class=\"bar\" style=\"width:" + s[0].h / s[0].n * 200 + "%;background:#e53935\"></div></div><span class=\"v\">" + pct(s[0].h / s[0].n) + "</span></div><div class=\"msg\">差距：<span class=\"gap bad\">" + pct(s[1].h / s[1].n - s[0].h / s[0].n) + "</span>。模型根本没看到性别，为什么还会偏向男性？</div>"; }],
+    ["3. 查代理变量", function () {
+      var r = [0,1].map(function (g) { var n = 0, h = 0; D.forEach(function (d) { if (d.g === g) { n++; h += d.s; } }); return h / n; });
+      return "<h2>名校毕业生的比例</h2><div class=\"barrow\"><span>男性</span><div><div class=\"bar\" style=\"width:" + r[1] * 100 + "%\"></div></div><span class=\"v\">" + pct(r[1]) + "</span></div><div class=\"barrow\"><span>女性</span><div><div class=\"bar\" style=\"width:" + r[0] * 100 + "%;background:#e53935\"></div></div><span class=\"v\">" + pct(r[0]) + "</span></div><div class=\"msg\">名校出身和性别相关。模型从带偏见的历史记录中学到“名校很重要”，给了它很大的权重，于是通过“名校”这个<b>代理变量</b>，间接地偏向了男性。</div>"; }],
+    ["4. 看混淆矩阵", function () {
+      var s = stats(preds("base"));
+      return "<h2>男女两组的混淆矩阵（“有能力”= 编程 ≥ 7 分）</h2><div class=\"grid2\"><div>" + cm(s[1], "男性") + "</div><div>" + cm(s[0], "女性") + "</div></div><div class=\"msg\">比较红色格子：女性中“有能力却被拒绝”的比例更高。模型对女性更苛刻。</div>"; }],
+    ["5. 试试改进办法", function () {
+      var K = [["base","原模型"],["noSchool","去掉“院校”特征"],["group","女性用更低的录用门槛"],["relabel","用不带性别偏见的标签重新训练"]], rows = "<tr><th>办法</th><th>男性录用率</th><th>女性录用率</th><th>差距</th><th>有能力女性被拒比例</th><th>整体准确率</th></tr>";
+      K.forEach(function (k) { var s = stats(preds(k[0])); rows += "<tr><td style=\"text-align:left\">" + k[1] + "</td><td>" + pct(s[1].h / s[1].n) + "</td><td>" + pct(s[0].h / s[0].n) + "</td><td><b>" + pct(s[1].h / s[1].n - s[0].h / s[0].n) + "</b></td><td>" + pct(s[0].fn / (s[0].tp + s[0].fn)) + "</td><td>" + pct(s.acc) + "</td></tr>"; });
+      return "<h2>几种改进办法的效果</h2><table class=\"t\">" + rows + "</table><div class=\"msg\">每种办法都有代价：去掉院校，差距缩小了，但准确率下降，模型也仍在模仿带偏见的历史录用；分组门槛能拉平录用率，但要在决策时使用性别，在很多地方存在法律和公平争议；修正标签最根本，却需要重新收集、核实数据。<b>没有一劳永逸的办法，关键是持续审计、公开讨论选择哪种公平。</b></div>"; }]
+  ];
+  $("steps").innerHTML = STEPS.map(function (s, i) { return '<button data-i="' + i + '">' + s[0] + "</button>"; }).join("");
+  document.querySelectorAll("#steps button").forEach(function (b) { b.onclick = function () { document.querySelectorAll("#steps button").forEach(function (x) { x.classList.toggle("on", x === b); }); $("out").innerHTML = STEPS[+b.dataset.i][1](); }; });
+  document.querySelector("#steps button").click();
+})();
+</script>
+<script src="../common/sim.js"></script>
+</body>
+</html>

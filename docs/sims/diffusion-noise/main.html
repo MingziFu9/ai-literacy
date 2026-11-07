@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>扩散：加噪与去噪</title>
+<link rel="stylesheet" href="../common/sim.css">
+<style>
+  canvas.big { width:100%; max-width:288px; image-rendering:pixelated; border-radius:8px; border:1px solid var(--line); }
+  .strip { display:flex; gap:6px; flex-wrap:wrap; margin-top:6px; }
+  .strip figure { margin:0; text-align:center; font-size:11px; color:var(--muted); }
+  .strip canvas { width:64px; height:64px; image-rendering:pixelated; border-radius:4px; border:1px solid var(--line); }
+  .sl { display:grid; grid-template-columns:6em 1fr 5em; gap:6px; align-items:center; font-size:13px; }
+</style>
+</head>
+<body>
+<h1>扩散模型：先把图变成雪花，再从雪花里“雕”出图</h1>
+<div class="sub">左边是“前向加噪”：每一步都往图上加一点随机噪声，50 步后只剩一片雪花。右边是“反向去噪”：从同一片雪花出发，在提示词的引导下一步步去掉噪声。</div>
+
+<div class="grid2">
+  <div class="box">
+    <h2>① 前向：加噪</h2>
+    <div class="row ex"><span class="lbl">原图：</span><span id="srcBtns"></span></div>
+    <canvas class="big" id="fwd" width="96" height="96"></canvas>
+    <div class="sl"><span>加噪步数 t</span><input type="range" id="t" min="0" max="50" value="0"><b id="tv"></b></div>
+    <div class="strip" id="fstrip"></div>
+  </div>
+  <div class="box">
+    <h2>② 反向：去噪（文生图）</h2>
+    <div class="row ex"><span class="lbl">提示词：</span><span id="pBtns"></span></div>
+    <canvas class="big" id="rev" width="96" height="96"></canvas>
+    <div class="row"><button class="main" id="go">从雪花开始去噪</button><button id="newNoise">换一片雪花</button><span id="rv" class="lbl"></span></div>
+    <div class="strip" id="rstrip"></div>
+  </div>
+</div>
+<div class="msg" id="msg">先拖动左边的滑块，看图片怎样一步步淹没在噪声里。</div>
+<div class="note">说明：为了让过程看得见，这里的“去噪”直接朝提示词对应的目标图前进。真实的扩散模型没有目标图，而是用一个训练好的神经网络在每一步<b>预测</b>图中的噪声并把它减掉，提示词通过“交叉注意力”影响这个预测。同一片雪花、不同的提示词，会得到不同的图；同一提示词、不同的雪花，也会得到不同的图。</div>
+
+<script>
+(function () {
+  var N = 96, T = 50;
+  function $(id) { return document.getElementById(id); }
+  function rng(seed) { return function () { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; }; }
+  function gauss(r) { var u = r() || 1e-9, v = r(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); }
+  var noise, seed = 7;
+  function makeNoise() { var r = rng(seed), a = new Float32Array(N * N * 3); for (var i = 0; i < a.length; i++) a[i] = gauss(r); noise = a; }
+  // 余弦噪声表：abar(t) 从 1 降到接近 0
+  function abar(t) { var s = 0.008, f = function (x) { return Math.pow(Math.cos((x / T + s) / (1 + s) * Math.PI / 2), 2); }; return Math.max(1e-4, f(t) / f(0)); }
+  var SCENES = {
+    "海上日出": function (g) { var gr = g.createLinearGradient(0, 0, 0, 60); gr.addColorStop(0, "#ff8a65"); gr.addColorStop(1, "#ffe082"); g.fillStyle = gr; g.fillRect(0, 0, 96, 60); g.fillStyle = "#ffeb3b"; g.beginPath(); g.arc(48, 58, 16, Math.PI, 0); g.fill(); g.fillStyle = "#1565c0"; g.fillRect(0, 60, 96, 36); g.fillStyle = "#64b5f6"; for (var i = 0; i < 5; i++) g.fillRect(28 + i * 3, 66 + i * 5, 40 - i * 6, 2); },
+    "一棵大树": function (g) { g.fillStyle = "#b3e5fc"; g.fillRect(0, 0, 96, 96); g.fillStyle = "#7cb342"; g.fillRect(0, 76, 96, 20); g.fillStyle = "#6d4c41"; g.fillRect(43, 48, 10, 32); g.fillStyle = "#2e7d32"; [[48, 34, 24], [32, 44, 15], [64, 44, 15]].forEach(function (c) { g.beginPath(); g.arc(c[0], c[1], c[2], 0, 7); g.fill(); }); },
+    "小房子": function (g) { g.fillStyle = "#e1f5fe"; g.fillRect(0, 0, 96, 96); g.fillStyle = "#a5d6a7"; g.fillRect(0, 78, 96, 18); g.fillStyle = "#fff3e0"; g.fillRect(24, 44, 48, 36); g.fillStyle = "#c62828"; g.beginPath(); g.moveTo(18, 46); g.lineTo(48, 20); g.lineTo(78, 46); g.fill(); g.fillStyle = "#5d4037"; g.fillRect(42, 58, 12, 22); g.fillStyle = "#4fc3f7"; g.fillRect(28, 52, 10, 10); g.fillRect(58, 52, 10, 10); },
+    "星空与月亮": function (g) { g.fillStyle = "#1a237e"; g.fillRect(0, 0, 96, 96); g.fillStyle = "#fff59d"; g.beginPath(); g.arc(66, 28, 14, 0, 7); g.fill(); g.fillStyle = "#1a237e"; g.beginPath(); g.arc(72, 24, 12, 0, 7); g.fill(); g.fillStyle = "#fff"; var r = rng(3); for (var i = 0; i < 40; i++) g.fillRect(r() * 96 | 0, r() * 70 | 0, 1 + (r() < .2), 1 + (r() < .2)); g.fillStyle = "#263238"; g.fillRect(0, 80, 96, 16); }
+  };
+  var IMG = {};
+  Object.keys(SCENES).forEach(function (k) { var c = document.createElement("canvas"); c.width = c.height = N; var g = c.getContext("2d"); SCENES[k](g); var d = g.getImageData(0, 0, N, N).data, a = new Float32Array(N * N * 3); for (var i = 0; i < N * N; i++) for (var ch = 0; ch < 3; ch++) a[i * 3 + ch] = d[i * 4 + ch] / 127.5 - 1; IMG[k] = a; });
+  function paint(cv, x0, t) {
+    var g = cv.getContext("2d"), im = g.createImageData(N, N), ab = abar(t), sa = Math.sqrt(ab), sb = Math.sqrt(1 - ab);
+    for (var i = 0; i < N * N; i++) { for (var ch = 0; ch < 3; ch++) { var v = sa * x0[i * 3 + ch] + sb * noise[i * 3 + ch]; im.data[i * 4 + ch] = Math.max(0, Math.min(255, (v + 1) * 127.5)); } im.data[i * 4 + 3] = 255; }
+    g.putImageData(im, 0, 0);
+  }
+  function strip(id, x0, ts) {
+    $(id).innerHTML = ts.map(function (t) { return '<figure><canvas width="96" height="96" data-t="' + t + '"></canvas><div>t = ' + t + "</div></figure>"; }).join("");
+    $(id).querySelectorAll("canvas").forEach(function (c) { paint(c, x0, +c.dataset.t); });
+  }
+  var src = "小房子", prompt = "一棵大树", timer = null;
+  function fwd() { var t = +$("t").value; $("tv").textContent = t + " / " + T; paint($("fwd"), IMG[src], t); var ab = abar(t);
+    $("msg").innerHTML = "第 " + t + " 步：原图信号还剩约 <b>" + Math.round(Math.sqrt(ab) * 100) + "%</b>，噪声占约 <b>" + Math.round(Math.sqrt(1 - ab) * 100) + "%</b>。" + (t >= 45 ? "到这里，已经几乎看不出原图了，这片“雪花”就是去噪的起点。" : ""); }
+  function btns(id, cur, cb) { $(id).innerHTML = Object.keys(SCENES).map(function (k) { return '<button class="' + (k === cur ? "on" : "") + '">' + k + "</button>"; }).join(""); $(id).querySelectorAll("button").forEach(function (b) { b.onclick = function () { cb(b.textContent); }; }); }
+  function setSrc(k) { src = k; btns("srcBtns", src, setSrc); fwd(); strip("fstrip", IMG[src], [0, 10, 20, 30, 40, 50]); }
+  function setPrompt(k) { prompt = k; btns("pBtns", prompt, setPrompt); paint($("rev"), IMG[prompt], T); $("rv").textContent = "t = 50（纯雪花）"; $("rstrip").innerHTML = ""; }
+  $("t").oninput = fwd;
+  $("go").onclick = function () {
+    if (timer) return; var t = T, shots = [];
+    timer = setInterval(function () {
+      paint($("rev"), IMG[prompt], t); $("rv").textContent = "去噪中：t = " + t;
+      if (t % 10 === 0) shots.push(t);
+      if (t <= 0) { clearInterval(timer); timer = null; strip("rstrip", IMG[prompt], shots); $("rv").textContent = "完成！";
+        $("msg").innerHTML = "同一片雪花，在“" + prompt + "”的引导下被一步步“雕刻”成了图像。换一个提示词再试一次，起点的雪花完全相同，结果却不同。"; }
+      t -= 1;
+    }, 60);
+  };
+  $("newNoise").onclick = function () { seed = (seed * 31 + 11) % 100000; makeNoise(); setSrc(src); setPrompt(prompt); $("msg").innerHTML = "换了一片新的随机噪声。在真实的文生图工具里，这相当于换了一个“随机种子”，同样的提示词会生成不同的图。"; };
+  makeNoise(); setSrc(src); setPrompt(prompt);
+})();
+</script>
+<script src="../common/sim.js"></script>
+</body>
+</html>

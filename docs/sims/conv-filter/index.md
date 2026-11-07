@@ -1,13 +1,13 @@
 ---
 title: 卷积滤镜
-description: 选卷积核处理图片，点任意像素看 3 × 3 窗口的计算过程，体会模糊、锐化和边缘检测（第 6 章）
+description: 选卷积核处理图片，点任意像素看 3 × 3 窗口的计算过程，体会模糊、锐化和边缘检测（第 4 章）
 ---
 
 # 卷积滤镜
 
 <iframe class="sim-frame" src="main.html" height="820" loading="lazy" title="卷积滤镜"></iframe>
 
-[全屏打开](main.html){ target=_blank } · 对应教材：[6.1.2 灰度与 RGB 颜色](../../chapters/06-computer-vision/index.md#612)、[6.2.1 卷积](../../chapters/06-computer-vision/index.md#621)、[6.2.2 不同的卷积核](../../chapters/06-computer-vision/index.md#622)、[体验 6-1](../../chapters/06-computer-vision/index.md#6-1)
+[全屏打开](main.html){ target=_blank } · 对应教材：[4.1.2 卷积神经网络（CNN）](../../chapters/04-vision-audio/4-1.md#412)
 
 ## 教学说明
 
@@ -29,6 +29,6 @@ description: 选卷积核处理图片，点任意像素看 3 × 3 窗口的计�
 
 **课堂用法建议**
 
-1. 先让学生手算 6.2.1 节“算一算”的例子（结果 760），再在动画中点方块的边缘核对思路。
+1. 先让学生手算一个 3 × 3 窗口，再在动画中点方块的边缘核对思路。
 2. 分组比较各个卷积核处理“小房子”的效果，讨论“哪个卷积核最适合找手机壳上的划痕”。
 3. 让学生自己设计卷积核，完成“让图片向左挪一格”“只找斜线”等小挑战，引出“卷积神经网络的卷积核是训练出来的”。

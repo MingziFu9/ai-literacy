@@ -1,13 +1,13 @@
 ---
 title: 自注意力热力图
-description: 看句子里每个词在“注意”哪些词，体会“它”怎样找到它指代的对象，以及掩码的作用（第 5 章）
+description: 看句子里每个词在“注意”哪些词，体会“它”怎样找到它指代的对象，以及掩码的作用（第 2 章）
 ---
 
 # 自注意力热力图
 
 <iframe class="sim-frame" src="main.html" height="720" loading="lazy" title="自注意力热力图"></iframe>
 
-[全屏打开](main.html){ target=_blank } · 对应教材：[5.4.1 注意力](../../chapters/05-nlp-llm/index.md#541)、[5.4.2 Transformer](../../chapters/05-nlp-llm/index.md#542)
+[全屏打开](main.html){ target=_blank } · 对应教材：[2.3.3 技术解密](../../chapters/02-ml-logic/2-3.md#233)
 
 ## 教学说明
 

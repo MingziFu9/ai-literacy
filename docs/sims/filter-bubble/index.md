@@ -1,13 +1,13 @@
 ---
 title: 信息茧房模拟
-description: 点开喜欢的内容，看推荐系统怎样越来越“懂”你、推荐种类怎样越来越少，再试试打破信息茧房的四种办法（第 9 章）
+description: 点开喜欢的内容，看推荐系统怎样越来越“懂”你、推荐种类怎样越来越少，再试试打破信息茧房的四种办法（第 8 章）
 ---
 
 # 信息茧房模拟
 
 <iframe class="sim-frame" src="main.html" height="900" loading="lazy" title="信息茧房模拟"></iframe>
 
-[全屏打开](main.html){ target=_blank } · 对应教材：[9.3.3 信息茧房](../../chapters/09-applications-ethics/index.md#933)、[9.7.2 管好自己的推荐](../../chapters/09-applications-ethics/index.md#972)、[体验 9-1](../../chapters/09-applications-ethics/index.md#9-1)
+[全屏打开](main.html){ target=_blank } · 对应教材：[8.2.1 隐形的价格标签](../../chapters/08-ethics/8-2.md#821)
 
 ## 教学说明
 

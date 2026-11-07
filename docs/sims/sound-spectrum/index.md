@@ -1,13 +1,13 @@
 ---
 title: 声音的模样：波形与频谱
-description: 对比纯音、口哨、元音、和弦、噪音的波形和频谱，用麦克风看自己的声音，调采样率和量化位数看数字化的效果（第 7 章）
+description: 对比纯音、口哨、元音、和弦、噪音的波形和频谱，用麦克风看自己的声音，调采样率和量化位数看数字化的效果（第 4 章）
 ---
 
 # 声音的模样：波形与频谱
 
 <iframe class="sim-frame" src="main.html" height="900" loading="lazy" title="声音的模样：波形与频谱"></iframe>
 
-[全屏打开](main.html){ target=_blank } · 对应教材：[7.1.1 声音是什么](../../chapters/07-speech/index.md#711)、[7.1.2 采样与量化](../../chapters/07-speech/index.md#712)、[7.1.3 波形与频谱](../../chapters/07-speech/index.md#713)、[体验 7-1](../../chapters/07-speech/index.md#7-1)
+[全屏打开](main.html){ target=_blank } · 对应教材：[4.3.1 声音的数字化](../../chapters/04-vision-audio/4-3.md#431)、[体验 4-2](../../chapters/04-vision-audio/labs.md#4-2)
 
 ## 教学说明
 

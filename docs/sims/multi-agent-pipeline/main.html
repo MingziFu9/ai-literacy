@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>多智能体流水线</title>
+<link rel="stylesheet" href="../common/sim.css">
+<style>
+  svg.net { width:100%; max-width:520px; display:block; margin:auto; }
+  .node rect { fill:#fff; stroke:var(--line); stroke-width:2; rx:10; transition:all .3s; }
+  .node.act rect { fill:var(--soft); stroke:var(--accent); stroke-width:3; }
+  .node.off { opacity:.25; }
+  .node text { font-size:13px; text-anchor:middle; }
+  .log { max-height:220px; overflow:auto; font-size:13px; }
+  .log div { padding:4px 6px; border-bottom:1px dashed var(--line); }
+  .log b { color:var(--accent); }
+  .doc { white-space:pre-wrap; font-size:13.5px; background:#fffde7; padding:8px; border-radius:6px; line-height:1.8; }
+  .err { background:#ffcdd2; } .fix { background:#c8e6c9; }
+</style>
+</head>
+<body>
+<h1>多智能体流水线：任务怎样在智能体之间传递？</h1>
+<div class="sub">任务：根据活动资料写一篇校园新闻稿。记者智能体的初稿里藏着 3 处错误，看看不同的协作模式和“审稿智能体”能拦下几处。</div>
+<div class="row"><span class="lbl">协作模式：</span><button data-m="seq" class="on">顺序流</button><button data-m="hier">层级式</button><button data-m="round">圆桌讨论</button>
+  <label style="margin-left:8px"><input type="checkbox" id="rev"> 加入审稿智能体</label></div>
+<div class="row"><button class="main" id="step">下一步</button><button id="auto">自动播放</button><button id="reset">重来</button><span class="lbl" id="prog"></span></div>
+<svg class="net" id="net" viewBox="0 0 520 170"></svg>
+<div class="grid2">
+  <div class="box"><h2>消息记录</h2><div class="log" id="log"></div></div>
+  <div class="box"><h2>当前稿件</h2><div class="doc" id="doc"></div><div class="msg" id="res"></div></div>
+</div>
+<div class="box"><h2>活动资料（所有智能体共享的原始素材）</h2><div style="font-size:13px">时间：11 月 20 日19:00 · 地点：图书馆报告厅（300 座）· 主讲：某科技公司算法工程师陈工 · 主题：大模型在职场中的应用 · 主办：AI 创新协会</div></div>
+<div class="note">说明：智能体的发言是编者编写的示意，用来展示三种协作模式的特点和审稿环节的作用，不是真实系统的运行记录。</div>
+
+<script>
+(function () {
+  var DRAFT = "【校园新闻】11 月 31 日晚，AI 创新协会在图书馆报告厅举办“大模型在职场中的应用”讲座，某大学教授陈老师担任主讲，吸引了 2000 余名同学到场。",
+      ERR = [{ a:"11 月 31 日", b:"11 月 20 日", n:"日期不存在（11 月只有 30 天）" }, { a:"2000 余名", b:"近 300 名", n:"人数超过报告厅容量（300 座）" }, { a:"某大学教授陈老师", b:"某科技公司算法工程师陈工", n:"主讲人身份写错" }];
+  var MODES = {
+    seq:{ nodes:[["记者",60,60],["编辑",180,60],["主编",300,60],["审稿",420,60,1],["人类终审",420,140,2]], edges:[[0,1],[1,2],[2,3],[3,4],[2,4,1]] },
+    hier:{ nodes:[["主管",260,30],["资料员",100,110],["写手",260,110],["配图员",420,110],["审稿",100,30,1],["人类终审",420,30,2]], edges:[[0,1],[0,2],[0,3],[0,4],[0,5]] },
+    round:{ nodes:[["记者",130,40],["编辑",390,40],["学生代表",130,140],["宣传委员",390,140],["审稿",260,90,1]], edges:[[0,1],[0,2],[0,3],[1,2],[1,3],[2,3],[4,0],[4,1],[4,2],[4,3]] }
+  };
+  var mode = "seq", steps = [], idx = 0, fixed = {}, timer = null;
+  function $(id) { return document.getElementById(id); }
+  function script() {
+    var R = $("rev").checked, s = [];
+    if (mode === "seq") {
+      s.push([0, "记者", "根据资料写出初稿（凭印象补了一些细节）。", null]);
+      s.push([1, "编辑", "理顺语句、统一文风。编辑只管文字，没有核对事实。", null]);
+      s.push([2, "主编", "拟标题“AI 走进校园”，配上活动照片。", null]);
+      if (R) { s.push([3, "审稿", "对照活动资料逐项核对：发现 11 月 31 日不存在，改为 11 月 20 日；报告厅只有 300 座，“2000 余名”不可能，改为“近 300 名”。", [0, 1]]);
+               s.push([3, "审稿", "主讲人信息：稿件写“教授陈老师”，资料写“陈工”。审稿规则只核对时间、地点、数字，这一处没有检查到。", null]); }
+      s.push([4, "人类终审", R ? "看过审稿意见后发布。" : "稿件读起来很通顺，就直接发布了。", null]);
+    } else if (mode === "hier") {
+      s.push([0, "主管", "把任务拆成三块：资料员整理事实、写手写稿、配图员找图。", null]);
+      s.push([1, "资料员", "从活动资料中提取：11 月 20 日、图书馆报告厅（300 座）、主讲陈工（算法工程师）。", null]);
+      s.push([2, "写手", "写稿时没有等资料员的结果，凭印象写了初稿。", null]);
+      s.push([0, "主管", "汇总时发现写手的日期和资料员的不一致，按资料员的事实改为 11 月 20 日；但人数和主讲人没注意到。", [0]]);
+      s.push([3, "配图员", "配上活动海报。", null]);
+      if (R) s.push([4, "审稿", "核对数字：报告厅 300 座，“2000 余名”不可能，改为“近 300 名”。主讲人身份不在审稿规则里，漏过。", [1]]);
+      s.push([5, "人类终审", "发布。", null]);
+    } else {
+      s.push([0, "记者", "在群里贴出初稿，请大家提意见。", null]);
+      s.push([2, "学生代表", "我当天在现场！主讲的是科技公司的陈工，不是大学教授。", [2]]);
+      s.push([3, "宣传委员", "建议加一段同学的现场感受，再加上协会下次活动的预告。", null]);
+      s.push([1, "编辑", "同意加现场感受。另外我觉得标题可以改成“当 AI 走进职场”。", null]);
+      s.push([3, "宣传委员", "那要不要顺便介绍一下协会的历史？（讨论开始跑题……）", null]);
+      if (R) s.push([4, "审稿", "核对资料：日期 11 月 31 日不存在，改为 11 月 20 日；人数超过报告厅容量，改为“近 300 名”。另提醒：讨论偏离了任务，建议收束。", [0, 1]]);
+      s.push([0, "记者", "汇总大家的意见，形成定稿。", null]);
+    }
+    return s;
+  }
+  function drawNet(active) {
+    var M = MODES[mode], R = $("rev").checked, s = "";
+    M.edges.forEach(function (e) { var a = M.nodes[e[0]], b = M.nodes[e[1]]; if ((a[3] === 1 || b[3] === 1) && !R) return; if (e[2] && R) return; s += '<line x1="' + a[1] + '" y1="' + a[2] + '" x2="' + b[1] + '" y2="' + b[2] + '" stroke="#cfd8dc" stroke-width="2"/>'; });
+    M.nodes.forEach(function (n, i) { var off = n[3] === 1 && !R; s += '<g class="node' + (i === active ? " act" : "") + (off ? " off" : "") + '"><rect x="' + (n[1] - 48) + '" y="' + (n[2] - 18) + '" width="96" height="36" rx="10"' + (n[3] === 2 ? ' style="stroke:#ef6c00"' : "") + '/><text x="' + n[1] + '" y="' + (n[2] + 5) + '">' + (n[3] === 2 ? "🧑 " : "🤖 ") + n[0] + "</text></g>"; });
+    $("net").innerHTML = s;
+  }
+  function drawDoc() {
+    var t = DRAFT;
+    ERR.forEach(function (e, i) { t = t.replace(e.a, fixed[i] ? '<span class="fix">' + e.b + "</span>" : '<span class="err">' + e.a + "</span>"); });
+    $("doc").innerHTML = t;
+  }
+  function reset() {
+    if (timer) { clearInterval(timer); timer = null; $("auto").textContent = "自动播放"; }
+    steps = script(); idx = 0; fixed = {}; $("log").innerHTML = ""; $("res").innerHTML = ""; drawNet(-1); drawDoc(); $("prog").textContent = "0 / " + steps.length; $("step").disabled = false;
+  }
+  function step() {
+    if (idx >= steps.length) return;
+    var s = steps[idx++]; drawNet(s[0]);
+    (s[3] || []).forEach(function (k) { fixed[k] = true; });
+    $("log").insertAdjacentHTML("beforeend", "<div><b>" + s[1] + "</b>：" + s[2] + "</div>"); $("log").scrollTop = 1e6;
+    drawDoc(); $("prog").textContent = idx + " / " + steps.length;
+    if (idx >= steps.length) {
+      $("step").disabled = true;
+      var left = ERR.filter(function (_, i) { return !fixed[i]; });
+      $("res").innerHTML = left.length ? '<span class="bad">发布的稿件还有 ' + left.length + " 处错误：</span>" + left.map(function (e) { return e.n; }).join("；") + "。" + (mode === "round" ? "" : " 审稿智能体只能查出它“被要求检查”的那类错误；人类终审要真正对照原始资料看一遍。") : '<span class="ok">3 处错误全部改正！</span>' + (mode === "round" ? " 不过圆桌讨论过程难以预测，也容易跑题。" : "");
+      if (timer) { clearInterval(timer); timer = null; $("auto").textContent = "自动播放"; }
+    }
+  }
+  $("step").onclick = step;
+  $("auto").onclick = function () { if (timer) { clearInterval(timer); timer = null; this.textContent = "自动播放"; return; } if (idx >= steps.length) reset(); this.textContent = "暂停"; timer = setInterval(step, 1300); };
+  $("reset").onclick = reset; $("rev").onchange = reset;
+  document.querySelectorAll("[data-m]").forEach(function (b) { b.onclick = function () { mode = b.dataset.m; document.querySelectorAll("[data-m]").forEach(function (x) { x.classList.toggle("on", x === b); }); reset(); }; });
+  reset();
+})();
+</script>
+<script src="../common/sim.js"></script>
+</body>
+</html>

@@ -7,7 +7,7 @@ description: 读 10 组问答，判断哪一边是人、哪一边是 AI，体会
 
 <iframe class="sim-frame" src="main.html" height="640" loading="lazy" title="图灵测试小游戏"></iframe>
 
-[全屏打开](main.html){ target=_blank } · 对应教材：[1.1.2 图灵测试](../../chapters/01-overview/index.md#112) · [体验 1-1](../../chapters/01-overview/index.md#1-1)
+[全屏打开](main.html){ target=_blank } · 对应教材：[1.1.1 像人一样行动](../../chapters/01-ai-intro/1-1.md#111)、[体验 1-1](../../chapters/01-ai-intro/labs.md#1-1)
 
 ## 教学说明
 

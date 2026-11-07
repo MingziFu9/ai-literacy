@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>快思考与慢思考</title>
+<link rel="stylesheet" href="../common/sim.css">
+<style>
+  .q { font-size:15px; font-weight:600; margin:6px 0; }
+  .bubble { border-radius:10px; padding:8px 12px; margin:6px 0; }
+  .fast { background:#fff3e0; border:1px solid #ffcc80; }
+  .slow { background:#e8eaf6; border:1px solid #c5cae9; }
+  .step { padding:4px 8px; margin:3px 0; border-left:3px solid #c5cae9; background:#fff; border-radius:0 6px 6px 0; opacity:0; transform:translateY(4px); transition:all .3s; }
+  .step.show { opacity:1; transform:none; }
+  .step.catch { border-left-color:var(--neg); background:#ffebee; }
+  .step.final { border-left-color:var(--pos); background:#e8f5e9; font-weight:600; }
+  .meta { font-size:12px; color:var(--muted); }
+</style>
+</head>
+<body>
+<h1>快思考与慢思考：先“想一会儿”，答案会不一样吗？</h1>
+<div class="sub">“快思考”像系统 1：凭直觉一口气说出答案。“慢思考”像系统 2：先写下推理过程，边想边检查。选一道题试试。</div>
+
+<div class="row ex" id="qs"></div>
+<div class="q" id="qt"></div>
+
+<div class="grid2">
+  <div class="box">
+    <h2>快思考：直接回答</h2>
+    <div class="bubble fast" id="fa"></div>
+    <div class="meta" id="fm"></div>
+  </div>
+  <div class="box">
+    <h2>慢思考：先推理，再回答</h2>
+    <div class="row"><button class="main" id="next">展开思考过程</button><button id="all">全部展开</button><button id="reset">重来</button></div>
+    <div id="steps"></div>
+    <div class="meta" id="sm"></div>
+  </div>
+</div>
+<div class="msg" id="msg"></div>
+<div class="note">说明：两种回答和“用时、词元数”都是编者根据推理模型的典型表现编写的示意，不是某个模型的真实输出。真实的推理模型思考过程往往长得多，也可能想错。</div>
+
+<script>
+(function () {
+  var Q = [
+    { k:"9.11 和 9.9", q:"9.11 和 9.9 哪个大？",
+      fast:"9.11 更大，因为 11 大于 9。", wrong:true,
+      steps:["这是两个小数的比较，不是日期，也不是版本号。","把位数补齐：9.11 和 9.90。","整数部分都是 9，一样大。","比较十分位：9.11 的十分位是 1，9.90 的十分位是 9。",{c:"1 < 9，所以 9.11 < 9.90。刚才“11 大于 9”的直觉是把小数部分当成整数比了。"},{f:"9.9 更大。"}],
+      why:"训练文本里“9.11”常以日期、版本号出现（9.11 版比 9.9 版新），模型凭直觉套用了这个模式。" },
+    { k:"玫瑰与凋谢", q:"所有的玫瑰都是花，有些花很快就会凋谢。能否推出“有些玫瑰很快就会凋谢”？",
+      fast:"能。玫瑰是花，花会很快凋谢，所以有些玫瑰会很快凋谢。", wrong:true,
+      steps:["前提 1：所有玫瑰都属于“花”。","前提 2：存在一些花，很快会凋谢。","要判断：是否一定存在很快凋谢的玫瑰？",{c:"前提 2 只说“有些花”，没说这些花里有玫瑰。如果很快凋谢的恰好全是别的花呢？"},"找到一个反例就够了：假设很快凋谢的只有昙花，两个前提都成立，结论却不成立。",{f:"不能推出。"}],
+      why:"句子表面很像一个正确的推理，直觉被“相似性”带偏了。" },
+    { k:"球拍和球", q:"球拍和球一共 1.10 元，球拍比球贵 1 元。球多少钱？",
+      fast:"球 0.10 元。", wrong:true,
+      steps:["设球 x 元，那么球拍是 x + 1 元。","两者加起来：x + (x + 1) = 1.10。",{c:"先检查直觉答案：如果球 0.10 元，球拍就是 1.10 元，加起来 1.20 元，不对。"},"解方程：2x + 1 = 1.10，2x = 0.10，x = 0.05。","验算：球 0.05 元，球拍 1.05 元，相差 1 元，合计 1.10 元。✓",{f:"球 0.05 元。"}],
+      why:"这是心理学家用来测试人类“系统 1”的经典题，很多人第一反应也是 0.10 元。" },
+    { k:"数字母", q:"英文单词 strawberry 里有几个字母 r？",
+      fast:"2 个。", wrong:true,
+      steps:["别凭印象，把单词一个字母一个字母拆开：","s - t - r - a - w - b - e - r - r - y","第 3 个字母是 r，计数 1。","第 8 个字母是 r，计数 2；第 9 个字母也是 r，计数 3。",{c:"直觉答案“2 个”漏掉了连在一起的 rr 中的一个。"},{f:"3 个。"}],
+      why:"模型看到的不是一个个字母，而是被切成几段的词元（如 str、aw、berry），看不清每段里有哪些字母。逐个拆开再数，就能答对。" },
+    { k:"睡莲盖湖", q:"湖里的睡莲每天面积翻一倍，第 48 天正好盖满整个湖。盖满半个湖是第几天？",
+      fast:"第 24 天。", wrong:true,
+      steps:["关键词是“每天面积翻一倍”，这是指数增长，不是匀速增长。","第 48 天盖满，说明第 47 天的面积再翻一倍就是满湖。",{c:"“48 的一半是 24”是按匀速增长算的，用错了模型。"},"所以第 47 天时，正好是半个湖。",{f:"第 47 天。"}],
+      why:"直觉习惯“线性”思考，对“翻倍”这种指数增长很不敏感。" },
+    { k:"法国首都", q:"法国的首都是哪里？",
+      fast:"巴黎。", wrong:false,
+      steps:["这是一个事实性问题，不需要多步推导。","训练资料中“法国的首都是巴黎”出现过无数次。",{f:"巴黎。"}],
+      why:"简单问题用快思考就够了。对这类问题“想很久”只会多花时间和算力。" }
+  ];
+  var cur = 0, shown = 0;
+  function $(id) { return document.getElementById(id); }
+  function stepHtml(s) {
+    if (typeof s === "string") return '<div class="step">' + s + "</div>";
+    if (s.c) return '<div class="step catch">🔍 自我检查：' + s.c + "</div>";
+    return '<div class="step final">最终回答：' + s.f + "</div>";
+  }
+  function load(i) {
+    cur = i; shown = 0; var q = Q[i];
+    document.querySelectorAll("#qs button").forEach(function (b, k) { b.classList.toggle("on", k === i); });
+    $("qt").textContent = "问题：" + q.q;
+    $("fa").innerHTML = q.fast + (q.wrong ? ' <span class="bad">✗</span>' : ' <span class="ok">✓</span>');
+    $("fm").textContent = "用时约 0.3 秒 · 输出约 " + (q.fast.length + 2) + " 个词元";
+    $("steps").innerHTML = q.steps.map(stepHtml).join("");
+    $("sm").textContent = ""; $("msg").innerHTML = ""; $("next").disabled = false; $("all").disabled = false;
+  }
+  function reveal() {
+    var els = $("steps").querySelectorAll(".step"); if (shown >= els.length) return;
+    els[shown].classList.add("show"); shown++;
+    if (shown === els.length) finish();
+  }
+  function finish() {
+    var q = Q[cur], len = q.steps.reduce(function (s, x) { return s + (typeof x === "string" ? x : (x.c || x.f)).length; }, 0);
+    $("sm").textContent = "用时约 " + (q.steps.length * 2) + " 秒 · 输出约 " + Math.round(len * 1.6) + " 个词元（其中大部分是思考过程）";
+    $("next").disabled = true; $("all").disabled = true;
+    $("msg").innerHTML = (q.wrong ? "<b>快思考答错了，慢思考在“自我检查”那一步发现并纠正了错误。</b>" : "<b>两种方式都答对了，但慢思考多花了不少时间和算力。</b>") + " " + q.why;
+  }
+  $("qs").innerHTML = '<span class="lbl">选题：</span>' + Q.map(function (q, i) { return '<button data-i="' + i + '">' + q.k + "</button>"; }).join("");
+  document.querySelectorAll("#qs button").forEach(function (b) { b.onclick = function () { load(+b.dataset.i); }; });
+  $("next").onclick = function () { reveal(); if (shown < Q[cur].steps.length) $("next").textContent = "下一步"; };
+  $("all").onclick = function () { while (shown < Q[cur].steps.length) reveal(); };
+  $("reset").onclick = function () { $("next").textContent = "展开思考过程"; load(cur); };
+  load(0);
+})();
+</script>
+<script src="../common/sim.js"></script>
+</body>
+</html>

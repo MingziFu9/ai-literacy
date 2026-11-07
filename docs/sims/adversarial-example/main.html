@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>对抗样本</title>
+<link rel="stylesheet" href="../common/sim.css">
+<style>
+  .imgs { display:flex; gap:10px; align-items:center; flex-wrap:wrap; justify-content:center; }
+  .imgs figure { margin:0; text-align:center; font-size:12px; color:var(--muted); }
+  .imgs canvas { width:128px; height:128px; image-rendering:pixelated; border:1px solid var(--line); border-radius:6px; }
+  .op { font-size:22px; color:var(--muted); }
+  .sl { display:grid; grid-template-columns:7em 1fr 4em; gap:6px; align-items:center; font-size:13px; }
+</style>
+</head>
+<body>
+<h1>对抗样本：一点点“精心计算”的噪声，就能骗过模型</h1>
+<div class="sub">左边是一张 16 × 16 的手写数字“3”，一个简化的图像分类器能正确认出它。给它加上一层很淡的噪声，看看模型的判断会怎样变化。</div>
+<div class="row"><span class="lbl">噪声类型：</span><button data-k="adv" class="on">对抗噪声（按模型的弱点计算）</button><button data-k="rnd">随机噪声</button></div>
+<div class="sl"><span>扰动强度 ε</span><input type="range" id="eps" min="0" max="0.15" step="0.0025" value="0"><b id="ev"></b></div>
+<div class="imgs">
+  <figure><canvas id="a" width="16" height="16"></canvas><div>原图</div></figure><span class="op">+</span>
+  <figure><canvas id="n" width="16" height="16"></canvas><div>噪声（放大 5 倍显示）</div></figure><span class="op">=</span>
+  <figure><canvas id="b" width="16" height="16"></canvas><div>加噪后的图</div></figure>
+</div>
+<div class="box"><h2>模型的判断</h2><div id="bars"></div><div class="msg" id="msg"></div></div>
+<div class="note">说明：分类器是一个简化的线性模型（把图片和“3”“8”两个模板比较），对抗噪声用“快速梯度符号法”（FGSM）计算：每个像素都朝“最能让模型改判”的方向挪 ε。真实的深度网络更复杂，但同样存在这种弱点。</div>
+
+<script>
+(function () {
+  var N = 16, kind = "adv";
+  function $(id) { return document.getElementById(id); }
+  function render(ch, dx, dy, font) {
+    var c = document.createElement("canvas"); c.width = c.height = N; var g = c.getContext("2d");
+    g.fillStyle = "#000"; g.fillRect(0, 0, N, N); g.fillStyle = "#fff"; g.font = font; g.textAlign = "center"; g.textBaseline = "middle"; g.fillText(ch, 8 + dx, 8.5 + dy);
+    var d = g.getImageData(0, 0, N, N).data, a = []; for (var i = 0; i < N * N; i++) a.push(d[i * 4] / 255); return a;
+  }
+  var T3 = render("3", 0, 0, "bold 15px sans-serif"), T8 = render("8", 0, 0, "bold 15px sans-serif");
+  var X = render("3", 0.5, 0.3, "bold 14px serif");
+  var W = T8.map(function (v, i) { return v - T3[i]; });
+  var wn = Math.sqrt(W.reduce(function (s, v) { return s + v * v; }, 0)); W = W.map(function (v) { return v / wn; });
+  function raw(x) { return x.reduce(function (s, v, i) { return s + v * W[i]; }, 0); }
+  var B = -raw(X) - 0.15, K = 20; // 原图得分约 -0.15，对应约 95% 是“3”
+  function p8(x) { return 1 / (1 + Math.exp(-K * (raw(x) + B))); }
+  var r = 12345, RND = W.map(function () { r = (r * 1103515245 + 12345) & 0x7fffffff; return r % 2 ? 1 : -1; });
+  function paint(id, arr, amp) { var g = $(id).getContext("2d"), im = g.createImageData(N, N); for (var i = 0; i < N * N; i++) { var v = amp ? 0.5 + arr[i] * amp : arr[i]; v = Math.max(0, Math.min(1, v)) * 255; im.data[i * 4] = im.data[i * 4 + 1] = im.data[i * 4 + 2] = v; im.data[i * 4 + 3] = 255; } g.putImageData(im, 0, 0); }
+  function update() {
+    var e = +$("eps").value; $("ev").textContent = e.toFixed(3);
+    var dir = kind === "adv" ? W.map(function (v) { return v > 0 ? 1 : v < 0 ? -1 : 0; }) : RND;
+    var noise = dir.map(function (s) { return s * e; }), Y = X.map(function (v, i) { return Math.max(0, Math.min(1, v + noise[i])); });
+    paint("a", X); paint("n", noise, 5); paint("b", Y);
+    var q = p8(Y), lab = q > 0.5 ? "8" : "3";
+    $("bars").innerHTML = [["“3”", 1 - q], ["“8”", q]].map(function (x) { return '<div class="barrow"><span>' + x[0] + '</span><div><div class="bar" style="width:' + (x[1] * 100).toFixed(1) + "%;" + (x[0] === "“8”" ? "background:#e53935" : "") + '"></div></div><span class="v">' + (x[1] * 100).toFixed(1) + "%</span></div>"; }).join("");
+    var avg = Y.reduce(function (s, v, i) { return s + Math.abs(v - X[i]); }, 0) / (N * N);
+    var m = "每个像素平均只变了 <b>" + (avg * 100).toFixed(1) + "%</b> 的亮度。模型认为它是“<b>" + lab + "</b>”。";
+    if (kind === "adv" && lab === "8") m += ' <span class="bad">模型被骗了！</span>人眼看来这仍然是“3”。256 个像素每个只挪一点点，但方向全都对准了模型的弱点，加起来的影响就很大。';
+    else if (kind === "rnd" && e > 0.05) m += " 同样强度的随机噪声，各个像素的影响有正有负、互相抵消，模型几乎不受影响。这就是为什么对抗噪声必须是“精心计算”的。";
+    else if (e === 0) m += " 拖动滑块，加一点噪声试试。";
+    $("msg").innerHTML = m;
+  }
+  $("eps").oninput = update;
+  document.querySelectorAll("[data-k]").forEach(function (b) { b.onclick = function () { kind = b.dataset.k; document.querySelectorAll("[data-k]").forEach(function (x) { x.classList.toggle("on", x === b); }); update(); }; });
+  update();
+})();
+</script>
+<script src="../common/sim.js"></script>
+</body>
+</html>

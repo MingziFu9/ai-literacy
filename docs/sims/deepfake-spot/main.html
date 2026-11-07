@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>找破绽：AI 生成图像鉴别</title>
+<link rel="stylesheet" href="../common/sim.css">
+<style>
+  .stage { display:grid; grid-template-columns:minmax(0,340px) 1fr; gap:12px; }
+  @media (max-width:640px) { .stage { grid-template-columns:1fr; } }
+  svg.pic { width:100%; border-radius:8px; border:1px solid var(--line); cursor:crosshair; background:#fafafa; }
+  .dots span { display:inline-block; width:22px; height:22px; line-height:22px; text-align:center; border-radius:50%; margin:1px; font-size:12px; background:#eceff1; }
+  .dots span.cur { outline:2px solid var(--accent); }
+  .dots span.r { background:#c8e6c9; } .dots span.w { background:#ffcdd2; }
+</style>
+</head>
+<body>
+<h1>找破绽：这是真实拍摄，还是 AI 生成？</h1>
+<div class="sub">下面 8 张是编者绘制的“放大细节”示意图，模拟真实照片和 AI 生成图像中的细节。先判断真假，如果认为是 AI 生成，就在破绽处点一下，最后看解析。</div>
+<div class="row dots" id="dots"></div>
+<div class="stage">
+  <div><svg class="pic" id="pic" viewBox="0 0 300 220"></svg></div>
+  <div class="box">
+    <h2 id="title"></h2>
+    <div class="row" id="ans"><button data-a="real">真实拍摄</button><button data-a="ai">AI 生成</button><button data-a="unk">看不出来</button></div>
+    <div class="msg" id="tip"></div>
+    <div class="row"><button class="main" id="reveal">看解析</button><button id="next">下一张</button></div>
+    <div class="msg" id="exp"></div>
+  </div>
+</div>
+<div class="box" id="sum" hidden></div>
+
+<script>
+(function () {
+  function fingers() { var s = ""; for (var i = 0; i < 6; i++) { var x = 92 + i * 23; s += '<rect x="' + x + '" y="' + (40 + Math.abs(i - 2.5) * 10) + '" width="18" height="90" rx="9" fill="#f0b48a" stroke="#c98b63"/>'; } return s; }
+  function fence() { var s = ""; for (var i = 0; i < 10; i++) { var x = 20 + i * 28; s += (i === 6 || i === 7) ? '<path d="M' + x + ' 170 Q' + (x + 16) + ' 125 ' + (x + 6) + ' 100" stroke="#455a64" stroke-width="6" fill="none"/>' : '<line x1="' + x + '" y1="100" x2="' + x + '" y2="170" stroke="#455a64" stroke-width="6"/>'; } return s; }
+  function person(x, color) { return '<circle cx="' + x + '" cy="80" r="14" fill="#5d4037"/><rect x="' + (x - 12) + '" y="95" width="24" height="60" rx="8" fill="' + color + '"/>'; }
+  var C = [
+    { t:"一只挥手的手", truth:"ai", hot:[150,75,75],
+      svg:'<rect width="300" height="220" fill="#ffe0b2"/><ellipse cx="150" cy="155" rx="62" ry="50" fill="#f0b48a"/>' + fingers() + '<rect x="200" y="140" width="60" height="18" rx="9" fill="#f0b48a" stroke="#c98b63" transform="rotate(-25 200 140)"/>',
+      exp:"数一数：除了大拇指，还有 6 根手指。手指数量、关节方向不对，是早期 AI 图像最常见的破绽。不过新一代模型画手已经好多了，这条线索正在失效。" },
+    { t:"街边的店铺招牌", truth:"ai", hot:[150,60,90],
+      svg:'<rect width="300" height="220" fill="#cfd8dc"/><rect x="40" y="30" width="220" height="60" rx="6" fill="#6d4c41"/><text x="150" y="72" font-size="34" text-anchor="middle" fill="#ffe0b2" font-weight="bold">咖叫非店</text><rect x="60" y="100" width="180" height="120" fill="#eceff1"/><rect x="80" y="125" width="55" height="95" fill="#90a4ae"/><rect x="160" y="125" width="60" height="50" fill="#b3e5fc"/>',
+      exp:"招牌上的字“似是而非”：本该是“咖啡店”，却多出了写错的字。AI 图像中的文字常常扭曲、拼错。但最新的模型已经能写出清晰正确的文字，这条线索也越来越靠不住。" },
+    { t:"戴眼镜的人", truth:"ai", hot:[150,98,35],
+      svg:'<rect width="300" height="220" fill="#e3f2fd"/><ellipse cx="150" cy="120" rx="80" ry="95" fill="#f5c9a8"/><circle cx="115" cy="100" r="24" fill="none" stroke="#263238" stroke-width="5"/><circle cx="185" cy="100" r="24" fill="none" stroke="#263238" stroke-width="5"/><path d="M139 98 Q146 90 151 93" stroke="#263238" stroke-width="5" fill="none"/><path d="M161 102 L158 96" stroke="#263238" stroke-width="3"/><circle cx="115" cy="100" r="6" fill="#4e342e"/><circle cx="185" cy="100" r="6" fill="#4e342e"/><path d="M125 160 Q150 175 175 160" stroke="#a1665e" stroke-width="5" fill="none"/>',
+      exp:"眼镜的鼻梁架在中间断开了，左右两边接不上。眼镜、耳环、项链这类左右对称或连续的配饰，是检查的好地方。" },
+    { t:"公园的栏杆", truth:"ai", hot:[200,135,55],
+      svg:'<rect width="300" height="220" fill="#c8e6c9"/><rect y="170" width="300" height="50" fill="#a1887f"/>' + fence() + '<line x1="10" y1="110" x2="290" y2="110" stroke="#455a64" stroke-width="6"/>',
+      exp:"右边几根栏杆弯曲、融在一起。背景里重复的直线结构（栏杆、窗户、砖缝）出现扭曲和融合，往往是扩散模型留下的痕迹。" },
+    { t:"阳光下的两个人", truth:"ai", hot:[175,162,40],
+      svg:'<rect width="300" height="220" fill="#fff8e1"/><circle cx="30" cy="30" r="18" fill="#ffca28"/><rect y="150" width="300" height="70" fill="#dcedc8"/><ellipse cx="135" cy="158" rx="40" ry="7" fill="#757575" opacity=".5"/>' + person(100, "#1e88e5") + '<ellipse cx="170" cy="158" rx="38" ry="7" fill="#757575" opacity=".5"/>' + person(210, "#e53935"),
+      exp:"太阳在左上方，左边的人影子朝右，是对的；右边的人影子却朝左，光照方向自相矛盾。检查影子、倒影和光源是否一致，是很好用的方法。" },
+    { t:"窗外的风景", truth:"real", hot:null,
+      svg:'<rect width="300" height="220" fill="#90caf9"/><path d="M0 150 L70 90 L130 140 L200 70 L300 150 V220 H0Z" fill="#66bb6a"/><path d="M0 180 Q150 160 300 185 V220 H0Z" fill="#43a047"/><circle cx="250" cy="45" r="20" fill="#fff59d"/><rect x="40" y="150" width="6" height="30" fill="#6d4c41"/><circle cx="43" cy="145" r="14" fill="#2e7d32"/>',
+      exp:"这一张模拟的是真实照片的细节，找不到破绽。注意：没有破绽不能证明是真的，但也不能因为“拍得太好看”就断定是假的。" },
+    { t:"一张精致的人像", truth:"ai", hot:null,
+      svg:'<rect width="300" height="220" fill="#f3e5f5"/><ellipse cx="150" cy="115" rx="70" ry="85" fill="#f5c9a8"/><path d="M80 90 Q150 10 220 90 Q220 40 150 30 Q80 40 80 90" fill="#4e342e"/><ellipse cx="122" cy="105" rx="10" ry="6" fill="#fff"/><ellipse cx="178" cy="105" rx="10" ry="6" fill="#fff"/><circle cx="122" cy="105" r="4" fill="#3e2723"/><circle cx="178" cy="105" r="4" fill="#3e2723"/><path d="M130 155 Q150 165 170 155" stroke="#c2185b" stroke-width="4" fill="none"/>',
+      exp:"这一张其实是 AI 生成的，但它没有任何肉眼可见的破绽。今天最好的 AI 人像，靠“找破绽”已经很难识别。所以：涉及钱和重要信息时，一定要<b>换渠道核实</b>，并留意平台的“AI 生成”标识。" },
+    { t:"一张模糊的截图", truth:"unk", hot:null,
+      svg:'<defs><filter id="bl"><feGaussianBlur stdDeviation="4"/></filter></defs><rect width="300" height="220" fill="#607d8b"/><g filter="url(#bl)"><rect x="60" y="60" width="70" height="120" fill="#37474f"/><circle cx="95" cy="50" r="18" fill="#bcaaa4"/><rect x="170" y="90" width="90" height="60" fill="#90a4ae"/></g><text x="10" y="210" font-size="11" fill="#eceff1">2024-05-12 21:13:07  CAM-03</text>',
+      exp:"画面太模糊、被反复压缩过，破绽和真实细节都被抹掉了，单凭这张图<b>无法判断</b>。这种“看不出来”的情况在网上最常见：先不要转发，等权威信息。" }
+  ];
+  var cur = 0, pick = {}, mark = {}, done = {};
+  function $(id) { return document.getElementById(id); }
+  function draw() {
+    var c = C[cur];
+    var s = c.svg;
+    if (mark[cur]) s += '<circle cx="' + mark[cur][0] + '" cy="' + mark[cur][1] + '" r="9" fill="none" stroke="#e53935" stroke-width="3"/><line x1="' + (mark[cur][0] - 13) + '" y1="' + mark[cur][1] + '" x2="' + (mark[cur][0] + 13) + '" y2="' + mark[cur][1] + '" stroke="#e53935" stroke-width="2"/>';
+    if (done[cur] && c.hot) s += '<circle cx="' + c.hot[0] + '" cy="' + c.hot[1] + '" r="' + c.hot[2] + '" fill="none" stroke="#43a047" stroke-width="4" stroke-dasharray="8 5"/>';
+    $("pic").innerHTML = s;
+    $("title").textContent = "第 " + (cur + 1) + " 张：" + c.t;
+    document.querySelectorAll("#ans button").forEach(function (b) { b.classList.toggle("on", pick[cur] === b.dataset.a); });
+    $("tip").textContent = pick[cur] === "ai" ? (mark[cur] ? "已标记，可以看解析了。" : "在图上点出你认为的破绽。") : (pick[cur] ? "可以看解析了。" : "先选一个判断。");
+    $("exp").innerHTML = done[cur] ? done[cur] : "";
+    $("dots").innerHTML = C.map(function (_, i) { var cl = (i === cur ? "cur " : "") + (done[i] ? (score(i) ? "r" : "w") : ""); return '<span class="' + cl + '">' + (i + 1) + "</span>"; }).join("");
+    document.querySelectorAll("#dots span").forEach(function (d, i) { d.onclick = function () { cur = i; draw(); }; });
+  }
+  function hitOk(i) { var c = C[i], m = mark[i]; return c.hot && m && Math.hypot(m[0] - c.hot[0], m[1] - c.hot[1]) <= c.hot[2]; }
+  function score(i) { var c = C[i]; return pick[i] === c.truth && (!c.hot || hitOk(i)); }
+  $("pic").onclick = function (e) {
+    if (done[cur]) return;
+    var r = this.getBoundingClientRect(); mark[cur] = [(e.clientX - r.left) / r.width * 300, (e.clientY - r.top) / r.height * 220];
+    if (!pick[cur]) pick[cur] = "ai"; draw();
+  };
+  document.querySelectorAll("#ans button").forEach(function (b) { b.onclick = function () { if (done[cur]) return; pick[cur] = b.dataset.a; if (b.dataset.a !== "ai") delete mark[cur]; draw(); }; });
+  $("reveal").onclick = function () {
+    if (!pick[cur]) { $("tip").textContent = "先选一个判断。"; return; }
+    var c = C[cur], ok = score(cur), lab = { real:"真实拍摄", ai:"AI 生成", unk:"无法判断" }[c.truth], head;
+    if (ok) head = '<span class="ok">✓ 判断正确（' + lab + "）" + (c.hot ? "，破绽也找对了" : "") + "。</span> ";
+    else if (pick[cur] === c.truth && c.hot) head = '<span class="warn" style="color:var(--warn)">真假判断对了，但破绽位置不对（绿色虚线圈是破绽所在）。</span> ';
+    else head = '<span class="bad">✗ 答案是：' + lab + "。</span> ";
+    done[cur] = head + c.exp; draw();
+    if (Object.keys(done).length === C.length) summary();
+  };
+  $("next").onclick = function () { cur = (cur + 1) % C.length; draw(); };
+  function summary() {
+    var n = C.filter(function (_, i) { return score(i); }).length;
+    $("sum").hidden = false;
+    $("sum").innerHTML = "<h2>全部完成：答对 " + n + " / " + C.length + "</h2>前 5 张的破绽（手指、文字、配饰、背景、光影）是常用的检查清单；但第 7 张告诉我们，最好的 AI 图像已经没有肉眼可见的破绽，第 8 张告诉我们，很多图片根本无从判断。所以“找破绽”只能当作参考，<b>换渠道核实、看来源和标识、不确定就不转发</b>才是更可靠的习惯。";
+  }
+  draw();
+})();
+</script>
+<script src="../common/sim.js"></script>
+</body>
+</html>

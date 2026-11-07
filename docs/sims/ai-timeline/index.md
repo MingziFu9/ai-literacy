@@ -7,7 +7,7 @@ description: 沿时间轴浏览人工智能的三次浪潮和两次低谷，比�
 
 <iframe class="sim-frame" src="main.html" height="660" loading="lazy" title="人工智能发展时间线"></iframe>
 
-[全屏打开](main.html){ target=_blank } · 对应教材：[1.2 人工智能的发展历程](../../chapters/01-overview/index.md#12) · [体验 1-1](../../chapters/01-overview/index.md#1-1) · [附录 B 人工智能大事年表](../../appendix/b-timeline.md)
+[全屏打开](main.html){ target=_blank } · 对应教材：[1.2 AI进化史](../../chapters/01-ai-intro/1-2.md#12)
 
 ## 教学说明
 
@@ -22,7 +22,7 @@ description: 沿时间轴浏览人工智能的三次浪潮和两次低谷，比�
 - 点卡片或圆点，下方显示事件说明和这个阶段的思路、成就、局限；“上一个 / 下一个事件”按时间顺序浏览。
 - 每个阶段都有一个“怎样认出一只猫”的小问题，对比四个阶段的不同做法。
 
-**来源**：改编自《自然语言处理导论》的“NLP 发展时间线”动画，事件依据本书 1.2 节和附录 B。
+**来源**：改编自《自然语言处理导论》的“NLP 发展时间线”动画，事件依据本书 1.2 节。
 
 **课堂用法建议**
 

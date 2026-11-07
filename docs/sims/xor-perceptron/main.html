@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>感知机与异或难题</title>
+<link rel="stylesheet" href="../common/sim.css">
+<style>
+  .wrap { display:grid; grid-template-columns:300px 1fr; gap:12px; }
+  @media (max-width:640px) { .wrap { grid-template-columns:1fr; } }
+  svg.plane { width:100%; max-width:300px; border:1px solid var(--line); border-radius:8px; touch-action:none; }
+  .sl { display:grid; grid-template-columns:5.5em 1fr 3em; gap:6px; align-items:center; font-size:13px; }
+  .tt td.o { font-weight:bold; }
+  .l2 { border-left:3px solid var(--warn); padding-left:8px; }
+</style>
+</head>
+<body>
+<h1>感知机与“异或”难题：一条直线能把黑白点分开吗？</h1>
+<div class="sub">平面上有 4 个点，橙色实心点要输出 1，空心点要输出 0。感知机能做的，就是画一条直线：直线一侧输出 1，另一侧输出 0。</div>
+
+<div class="row"><span class="lbl">运算：</span>
+  <button data-op="and">与（AND）</button><button data-op="or" class="on">或（OR）</button><button data-op="xor">异或（XOR）</button>
+  <label style="margin-left:8px"><input type="checkbox" id="two"> 两条直线（隐藏层）</label>
+</div>
+
+<div class="wrap">
+  <svg class="plane" id="pl" viewBox="0 0 300 300"></svg>
+  <div>
+    <div class="box">
+      <h2>直线 1：w₁·x₁ + w₂·x₂ + b &gt; 0 时输出 1</h2>
+      <div class="sl"><span>w₁</span><input type="range" id="w1" min="-3" max="3" step="0.1" value="1"><b id="w1v"></b></div>
+      <div class="sl"><span>w₂</span><input type="range" id="w2" min="-3" max="3" step="0.1" value="1"><b id="w2v"></b></div>
+      <div class="sl"><span>b</span><input type="range" id="b" min="-3" max="3" step="0.1" value="-1.5"><b id="bv"></b></div>
+      <div id="l2box" class="l2" hidden>
+        <h2 style="color:var(--warn)">直线 2（第二个隐藏神经元）</h2>
+        <div class="sl"><span>v₁</span><input type="range" id="v1" min="-3" max="3" step="0.1" value="1"><b id="v1v"></b></div>
+        <div class="sl"><span>v₂</span><input type="range" id="v2" min="-3" max="3" step="0.1" value="1"><b id="v2v"></b></div>
+        <div class="sl"><span>c</span><input type="range" id="c" min="-3" max="3" step="0.1" value="-1.5"><b id="cv"></b></div>
+        <div class="note">输出规则：在直线 1 的“1”一侧、并且在直线 2 的“0”一侧，才输出 1（两条直线之间的带状区域）。</div>
+      </div>
+      <div class="row"><button class="main" id="learn">让感知机自己学</button><button id="demo" hidden>示范一组解</button></div>
+    </div>
+    <div class="box">
+      <h2>真值表</h2>
+      <table class="t tt" id="tt"></table>
+      <div class="msg" id="msg"></div>
+    </div>
+  </div>
+</div>
+<div class="note">感知机的学习规则：每遇到一个分错的点，就把直线朝能分对它的方向挪一点。如果存在一条能分开所有点的直线，这样学下去一定能找到；如果根本不存在，它就永远学不完。</div>
+
+<script>
+(function () {
+  var OPS = { and:[0,0,0,1], or:[0,1,1,1], xor:[0,1,1,0] }, NAMES = { and:"与", or:"或", xor:"异或" };
+  var PTS = [[0,0],[0,1],[1,0],[1,1]], op = "or", timer = null;
+  function $(id) { return document.getElementById(id); }
+  function val(id) { return +$(id).value; }
+  function px(x) { return 50 + x * 200; } function py(y) { return 250 - y * 200; }
+  function h1(x, y) { return val("w1") * x + val("w2") * y + val("b") > 0 ? 1 : 0; }
+  function h2(x, y) { return val("v1") * x + val("v2") * y + val("c") > 0 ? 1 : 0; }
+  function out(x, y) { return $("two").checked ? (h1(x, y) && !h2(x, y) ? 1 : 0) : h1(x, y); }
+  function lineSeg(a, b, c, color) {
+    // a·x + b·y + c = 0，在 x、y ∈ [-0.25, 1.25] 范围内画出
+    var pts = [], lo = -0.25, hi = 1.25;
+    if (Math.abs(b) > 1e-6) { [lo, hi].forEach(function (x) { var y = -(a * x + c) / b; pts.push([x, y]); }); }
+    else if (Math.abs(a) > 1e-6) { var x = -c / a; pts.push([x, lo], [x, hi]); }
+    if (pts.length < 2) return "";
+    return '<line x1="' + px(pts[0][0]) + '" y1="' + py(pts[0][1]) + '" x2="' + px(pts[1][0]) + '" y2="' + py(pts[1][1]) + '" stroke="' + color + '" stroke-width="3"/>';
+  }
+  function draw() {
+    ["w1","w2","b","v1","v2","c"].forEach(function (k) { $(k + "v").textContent = val(k).toFixed(1); });
+    var s = "", n = 30;
+    for (var i = 0; i < n; i++) for (var j = 0; j < n; j++) {
+      var x = -0.25 + (i + 0.5) * 1.5 / n, y = -0.25 + (j + 0.5) * 1.5 / n;
+      if (out(x, y)) s += '<rect x="' + (px(x) - 5) + '" y="' + (py(y) - 5) + '" width="10" height="10" fill="#ffe0b2"/>';
+    }
+    s += '<line x1="50" y1="250" x2="270" y2="250" stroke="#90a4ae"/><line x1="50" y1="250" x2="50" y2="30" stroke="#90a4ae"/>';
+    s += '<text x="272" y="266" font-size="12">x₁</text><text x="36" y="34" font-size="12">x₂</text>';
+    s += lineSeg(val("w1"), val("w2"), val("b"), "#3f51b5");
+    if ($("two").checked) s += lineSeg(val("v1"), val("v2"), val("c"), "#ef6c00");
+    var ok = 0, rows = "<tr><th>x₁</th><th>x₂</th><th>应该输出</th><th>感知机输出</th><th></th></tr>";
+    PTS.forEach(function (p, k) {
+      var want = OPS[op][k], got = out(p[0], p[1]), good = want === got; if (good) ok++;
+      s += '<circle cx="' + px(p[0]) + '" cy="' + py(p[1]) + '" r="11" fill="' + (want ? "#ef6c00" : "#fff") + '" stroke="' + (good ? "#263238" : "#e53935") + '" stroke-width="' + (good ? 2 : 4) + '"/>';
+      s += '<text x="' + (px(p[0]) + 14) + '" y="' + (py(p[1]) + 18) + '" font-size="11" fill="#78909c">(' + p[0] + "," + p[1] + ")</text>";
+      rows += "<tr><td>" + p[0] + "</td><td>" + p[1] + "</td><td>" + want + '</td><td class="o">' + got + "</td><td>" + (good ? '<span class="ok">✓</span>' : '<span class="bad">✗</span>') + "</td></tr>";
+    });
+    $("pl").innerHTML = s; $("tt").innerHTML = rows;
+    return ok;
+  }
+  function report(ok, extra) {
+    var m = "4 个点分对了 <b>" + ok + "</b> 个。";
+    if (ok === 4) m += '<span class="ok">全部分对！</span>';
+    else if (op === "xor" && !$("two").checked) m += "试了很多次还是不行？对“异或”来说，<b>不存在</b>一条能把两类点分开的直线，这就是 1969 年明斯基指出的单层感知机的局限。";
+    $("msg").innerHTML = m + (extra || "");
+  }
+  function update() { stop(); report(draw()); }
+  function stop() { if (timer) { clearInterval(timer); timer = null; $("learn").textContent = "让感知机自己学"; } }
+  $("learn").onclick = function () {
+    if (timer) { stop(); return; }
+    if ($("two").checked) { $("two").checked = false; $("l2box").hidden = true; $("demo").hidden = true; }
+    var epoch = 0, lr = 0.3; $("learn").textContent = "停止";
+    timer = setInterval(function () {
+      epoch++; var errs = 0;
+      PTS.forEach(function (p, k) {
+        var e = OPS[op][k] - h1(p[0], p[1]);
+        if (e) { errs++; $("w1").value = (val("w1") + lr * e * p[0]).toFixed(1); $("w2").value = (val("w2") + lr * e * p[1]).toFixed(1); $("b").value = (val("b") + lr * e).toFixed(1); }
+      });
+      var ok = draw();
+      if (!errs) { stop(); report(ok, " 学了 " + epoch + " 轮就找到了。"); }
+      else if (epoch >= 40) { stop(); report(ok, " 学了 40 轮仍有点分错，直线在来回摆动，永远停不下来。"); }
+      else report(ok, " 第 " + epoch + " 轮，本轮改错 " + errs + " 次……");
+    }, 250);
+  };
+  $("demo").onclick = function () {
+    stop(); var v = { w1:1, w2:1, b:-0.5, v1:1, v2:1, c:-1.5 };
+    Object.keys(v).forEach(function (k) { $(k).value = v[k]; });
+    report(draw(), " 直线 1 相当于“或”，直线 2 相当于“与”，输出“或但不与”，正好就是“异或”。多一层神经元，就多了组合直线的能力。");
+  };
+  $("two").onchange = function () { $("l2box").hidden = !this.checked; $("demo").hidden = !this.checked; update(); };
+  document.querySelectorAll("[data-op]").forEach(function (b) {
+    b.onclick = function () { op = b.dataset.op; document.querySelectorAll("[data-op]").forEach(function (x) { x.classList.toggle("on", x === b); }); update(); };
+  });
+  ["w1","w2","b","v1","v2","c"].forEach(function (k) { $(k).oninput = update; });
+  update();
+})();
+</script>
+<script src="../common/sim.js"></script>
+</body>
+</html>

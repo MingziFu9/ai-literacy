@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI+X 三层分类器</title>
+<link rel="stylesheet" href="../common/sim.css">
+<style>
+  .cols { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+  @media (max-width:640px) { .cols { grid-template-columns:1fr; } }
+  .col { border:2px dashed var(--line); border-radius:8px; padding:6px; min-height:120px; }
+  .col h3 { margin:0 0 4px; font-size:13px; color:var(--accent); }
+  .col .d { font-size:11.5px; color:var(--muted); margin-bottom:4px; }
+  .card { border:1px solid var(--line); border-radius:8px; padding:6px 8px; margin:4px 0; font-size:13px; background:#fff; }
+  .card .bt { margin-top:4px; display:flex; gap:4px; flex-wrap:wrap; }
+  .card .bt button { font-size:11.5px; padding:1px 8px; }
+  .card.ok { border-color:var(--pos); background:#f1f8e9; }
+  .card.alt { border-color:var(--warn); background:#fff8e1; }
+  .card.no { border-color:var(--neg); background:#ffebee; }
+  .card .ex { font-size:12px; color:#455a64; margin-top:4px; }
+  #pool .card { display:inline-block; width:calc(50% - 6px); margin:3px; vertical-align:top; }
+  @media (max-width:640px) { #pool .card { width:100%; } }
+</style>
+</head>
+<body>
+<h1>AI+X 三层分类器：AI 把这个行业改变到了哪一层？</h1>
+<div class="sub">给每张案例卡片选一层：工具赋能（流程不变，AI 辅助人）、流程重构（核心环节被 AI 改写）、生态颠覆（出现以前没有的产品和业态）。全部分完后点“提交”。</div>
+<div class="box"><h2>待分类的案例（<span id="left"></span> 张）</h2><div id="pool"></div></div>
+<div class="cols">
+  <div class="col" id="c0"><h3>第一层：工具赋能</h3><div class="d">给马车换上橡胶轮胎</div></div>
+  <div class="col" id="c1"><h3>第二层：流程重构</h3><div class="d">用汽车代替马车</div></div>
+  <div class="col" id="c2"><h3>第三层：生态颠覆</h3><div class="d">发明飞机，开启空中交通</div></div>
+</div>
+<div class="row"><button class="main" id="sub">提交</button><button id="reset">重来</button></div>
+<div class="msg" id="msg"></div>
+<div class="note">说明：参考答案是编者的判断，依据是 6.1.2 节的三层模型。黄色卡片表示“放在你选的这层也说得通”，关键是能说出理由：流程变了没有？有没有出现新的产品或商业模式？</div>
+
+<script>
+(function () {
+  var L = ["工具赋能", "流程重构", "生态颠覆"];
+  var C = [
+    ["AI 辅助阅片：系统圈出 CT 片上的疑似结节，医生重点复核后签字诊断", 0, [], "流程没变，医生仍是主角，AI 只是帮忙“多看一眼”。"],
+    ["电商客服机器人自动回答“什么时候发货”等常见问题，复杂问题转人工", 0, [1], "大部分是工具赋能；如果企业据此重新设计了整个客服流程和人员配置，也可以算流程重构。"],
+    ["办公软件里的 AI 助手帮你润色报告、生成会议纪要", 0, [], "写报告、开会的流程没变，只是做得更快。"],
+    ["无人机自动巡检输电线路，取代人工爬塔检查", 1, [0], "巡检这个核心环节从“人爬塔”变成“机器飞、AI 判图、人复核”，属于流程重构；只看“帮人省力”也可以说是工具赋能。"],
+    ["影视制作中 AI 自动抠像，部分镜头直接用 AI 生成", 1, [], "“绿幕—抠像—建模—渲染”的传统流水线被改写，工作重点转向描述需求和挑选精修。"],
+    ["银行用 AI 实时识别欺诈交易，小额贷款几分钟内自动审批", 1, [], "审批从“人工逐笔审核”变成“模型实时评估、人处理例外”，核心环节被改写。"],
+    ["智能仓储：AI 预测销量提前备货，机器人把货架搬到拣货员面前", 1, [], "从“人找货”变成“货找人”，仓库的作业流程整体重构。"],
+    ["车路协同：路口的传感器把信息实时发给车辆，提前预警", 1, [2], "改变了“车只靠自己看路”的方式；如果发展成全新的智慧交通服务，也有生态颠覆的意味。"],
+    ["无人驾驶出租车（Robotaxi）：车上没有司机，按里程收费的出行服务", 2, [], "不只是“更好的出租车”，而是出行即服务，商业模式从卖车变成运营车队。"],
+    ["AlphaFold 预测了 2 亿多种蛋白质结构，免费向全球开放", 2, [1], "改变了结构生物学的研究方式，催生新的研究方向和药物研发路径；从实验室流程看，也可以说是流程重构。"],
+    ["AI 虚拟主播 24 小时直播带货", 2, [1], "出现了以前没有的“数字人”业态；从直播间的运营流程看，也是一种流程重构。"],
+    ["农业无人机按 AI 生成的“处方图”给不同地块喷不同剂量的药", 1, [0], "从“全田一个剂量”变成“按需变量作业”，农事流程被改写；只看“替人打药”也可以算工具赋能。"]
+  ];
+  var place = {};
+  function $(id) { return document.getElementById(id); }
+  function card(i, judged) {
+    var c = C[i], p = place[i], cls = "";
+    if (judged) cls = p === c[1] ? " ok" : (c[2].indexOf(p) >= 0 ? " alt" : " no");
+    var bt = '<div class="bt">' + L.map(function (l, k) { return '<button data-i="' + i + '" data-k="' + k + '"' + (p === k ? ' class="on"' : "") + ">" + l + "</button>"; }).join("") + (p !== undefined ? '<button data-i="' + i + '" data-k="-1">放回</button>' : "") + "</div>";
+    var ex = judged ? '<div class="ex">' + (p === c[1] ? "✓ " : c[2].indexOf(p) >= 0 ? "也说得通。参考答案是“" + L[c[1]] + "”。" : "✗ 参考答案是“" + L[c[1]] + "”。") + c[3] + "</div>" : "";
+    return '<div class="card' + cls + '">' + (i + 1) + ". " + c[0] + (judged ? "" : bt) + ex + "</div>";
+  }
+  function render(judged) {
+    var pool = "", cols = ["", "", ""], n = 0;
+    C.forEach(function (_, i) { if (place[i] === undefined) { pool += card(i, false); n++; } else cols[place[i]] += card(i, judged); });
+    $("pool").innerHTML = pool || '<span class="lbl">全部分好了，可以提交。</span>'; $("left").textContent = n;
+    cols.forEach(function (h, k) { var col = $("c" + k); col.querySelectorAll(".card").forEach(function (x) { x.remove(); }); col.insertAdjacentHTML("beforeend", h); });
+    document.querySelectorAll(".bt button").forEach(function (b) { b.onclick = function () { var i = +b.dataset.i, k = +b.dataset.k; if (k < 0) delete place[i]; else place[i] = k; $("msg").innerHTML = ""; render(false); }; });
+  }
+  $("sub").onclick = function () {
+    var n = Object.keys(place).length;
+    if (n < C.length) { $("msg").innerHTML = "还有 " + (C.length - n) + " 张卡片没分类。"; return; }
+    render(true);
+    var ok = C.filter(function (c, i) { return place[i] === c[1]; }).length, alt = C.filter(function (c, i) { return place[i] !== c[1] && c[2].indexOf(place[i]) >= 0; }).length;
+    $("msg").innerHTML = "与参考答案一致 <b>" + ok + "</b> 张，另有 <b>" + alt + "</b> 张“也说得通”。和同学比一比：你们分歧最大的是哪几张？各自的理由是什么？";
+  };
+  $("reset").onclick = function () { place = {}; $("msg").innerHTML = ""; render(false); };
+  render(false);
+})();
+</script>
+<script src="../common/sim.js"></script>
+</body>
+</html>

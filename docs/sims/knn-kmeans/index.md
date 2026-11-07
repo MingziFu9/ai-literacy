@@ -1,13 +1,13 @@
 ---
 title: K 近邻与 K 均值
-description: 放一位新会员看 K 近邻怎样投票分类，再一步步看 K 均值怎样把会员分群（第 3 章）
+description: 放一位新会员看 K 近邻怎样投票分类，再一步步看 K 均值怎样把会员分群（第 6 章）
 ---
 
 # K 近邻与 K 均值
 
 <iframe class="sim-frame" src="main.html" height="720" loading="lazy" title="K 近邻与 K 均值"></iframe>
 
-[全屏打开](main.html){ target=_blank } · 对应教材：[3.5 分类](../../chapters/03-machine-learning/index.md#35) · [3.6 聚类](../../chapters/03-machine-learning/index.md#36) · [体验 3-1](../../chapters/03-machine-learning/index.md#3-1)
+[全屏打开](main.html){ target=_blank } · 对应教材：[6.4.1 AI+金融](../../chapters/06-ai-plus-x/6-4.md#641)
 
 ## 教学说明
 

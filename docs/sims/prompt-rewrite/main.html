@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>提示词改写前后</title>
+<link rel="stylesheet" href="../common/sim.css">
+<style>
+  .els { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; }
+  @media (max-width:620px) { .els { grid-template-columns:repeat(2,1fr); } }
+  .el { border:1px solid var(--line); border-radius:8px; padding:4px 8px; font-size:13px; cursor:pointer; user-select:none; }
+  .el.on { border-color:var(--accent); background:var(--soft); }
+  .el b { color:var(--accent); }
+  pre.p, pre.o { white-space:pre-wrap; margin:0; font:inherit; font-size:13.5px; line-height:1.7; }
+  pre.p { background:#f5f7fa; padding:8px; border-radius:6px; min-height:4em; }
+  pre.o { background:#fffde7; padding:8px; border-radius:6px; min-height:8em; }
+  .chk { font-size:13px; margin:1px 0; }
+</style>
+</head>
+<body>
+<h1>提示词改写前后：六个要素，各管什么？</h1>
+<div class="sub">先看“小白写法”得到的输出，再逐个勾选 CO-STAR 的六个要素，看提示词和输出怎样一步步变好。</div>
+<div class="row ex" id="sc"></div>
+<div class="els" id="els"></div>
+<div class="row"><button id="none">全部取消（小白写法）</button><button id="allon">全部勾选</button></div>
+
+<div class="grid2">
+  <div class="box"><h2>你的提示词</h2><pre class="p" id="pr"></pre></div>
+  <div class="box"><h2>AI 的输出（模拟）</h2><pre class="o" id="out"></pre></div>
+</div>
+<div class="box"><h2>检查清单：<span id="score"></span></h2><div id="chk"></div></div>
+<div class="note">说明：输出是编者为演示每个要素的作用而编写的，用规则拼接而成，不是真实大模型的回答。真实模型的输出会有随机性，但“缺了哪个要素就容易出哪类问题”的规律是一样的。</div>
+
+<script>
+(function () {
+  var KEYS = ["C","O","S","T","A","R"], NAMES = { C:"背景", O:"目标", S:"风格", T:"语调", A:"受众", R:"格式" };
+  var CHECK = { C:"信息具体：有真实的名字、时间、数字", O:"目标明确：读者知道要做什么", S:"风格合适：符合这个场合的文体", T:"语调得体：不生硬、不浮夸", A:"贴合读者：照顾到读者的身份和顾虑", R:"格式规范：长度、结构符合要求" };
+  var SC = [
+    { name:"社团招新朋友圈", base:"帮我写个社团招新的文案。",
+      el:{ C:"我是学校 AI 创新协会的宣传委员。协会每周三晚上有 AI 工具分享会，学期末办作品展。本周五（9 月 20 日）中午 12 点在一食堂门口摆摊招新。",
+           O:"目标：吸引同学周五来摊位扫码报名，写清时间、地点和报名方式。",
+           S:"风格：朋友圈文案，短句、口语化，可以用两三个表情符号。",
+           T:"语调：热情、轻松，不要夸张吹嘘。",
+           A:"读者：刚入学的大一新生，很多人没接触过编程。",
+           R:"格式：不超过 100 字，分 3～4 行，最后加一个话题标签。" },
+      build:function (f) {
+        var name = f.C ? "AI 创新协会" : "我们社团";
+        var act = f.C ? "每周三晚上一起玩转 AI 工具，期末还能办作品展" : "社团活动丰富多彩，能够提升自我、锻炼能力、结识朋友";
+        var cta = f.O ? (f.C ? "周五中午 12 点，一食堂门口扫码报名" : "欢迎来摊位扫码报名") : "欢迎大家加入";
+        var aud = f.A ? "零基础也没关系，不会编程也能玩" : "";
+        var fluff = "本社团成立以来，始终秉持“团结、进取、创新、奉献”的宗旨，致力于为广大同学搭建交流学习的平台，营造良好的校园文化氛围，促进同学们的全面发展……";
+        if (!f.S) {
+          var s = "【招新公告】" + name + "现面向全校招募新成员。" + act + "。" + (aud ? aud + "。" : "") + cta + "。" + (f.T ? "期待与你相遇！" : "机会难得，不容错过！！！");
+          return f.R ? s + "\n#" + (f.C ? "AI创新协会" : "社团") + "招新" : s + "\n" + fluff;
+        }
+        var L = [f.T ? "🤖 想认识一群爱折腾 AI 的朋友吗？" : "🔥🔥史上最强社团来了！！错过再等一年！！🔥🔥", act + (aud ? "，" + aud : "") + "～", "📍" + cta, f.T ? "来摊位聊聊天也好 👋" : "冲冲冲！！！"];
+        if (f.R) return L.join("\n") + "\n#" + (f.C ? "AI创新协会" : "社团") + "招新";
+        return L.join("\n") + "\n还有更多惊喜等你发现，名额有限先到先得，快来加入我们这个温暖的大家庭吧～～～✨🎉💯🌟";
+      } },
+    { name:"提醒老师回邮件", base:"帮我写封邮件催一下老师。",
+      el:{ C:"我是大二学生王明。10 月 8 日给李老师发邮件，请他帮我看看奖学金申请的推荐信草稿，至今没有回复。申请截止日期是 10 月 25 日。",
+           O:"目标：礼貌地提醒老师，请他在 10 月 22 日前抽空看一下；如果不方便，请老师告诉我，我好另作安排。",
+           S:"风格：正式的书面邮件。",
+           T:"语调：礼貌、谦逊，体谅老师工作忙。",
+           A:"读者：我的专业课老师李老师。",
+           R:"格式：包含邮件主题、称呼、正文、落款，正文 150 字以内。" },
+      build:function (f) {
+        var s = f.R ? "主题：关于奖学金推荐信的提醒" + (f.C ? "（王明）" : "") + "\n\n" : "";
+        s += f.A ? "李老师：\n您好！" : (f.S ? "老师：\n您好！" : "老师好，");
+        s += f.C ? "我是大二的王明。10 月 8 日我给您发过邮件，想请您帮忙看看奖学金申请的推荐信草稿。" : "之前给您发的邮件您看了吗？";
+        s += f.T ? "知道您最近工作很忙，冒昧再打扰您一次。" : (f.C ? "到现在还没收到回复。" : "一直没回。");
+        if (f.O) s += (f.C ? "申请截止日期是 10 月 25 日，" : "申请快截止了，") + "想请您在 10 月 22 日前抽空看一下；如果不方便，也请告诉我，我好另作安排。";
+        else s += f.T ? "麻烦您有空回复一下。" : "这个事挺急的，请尽快回复！";
+        if (f.T) s += "谢谢老师！";
+        if (f.S || f.R) s += "\n\n此致\n敬礼！\n\n学生 " + (f.C ? "王明" : "××") + (f.C ? "\n10 月 18 日" : "");
+        if (!f.R && !f.S) s += "\n（另外我最近还有几门课的作业也想请教您，等您回复了我们再细说。）";
+        return s;
+      } },
+    { name:"催款邮件（教材案例）", base:"帮我写个催款邮件，对方欠钱很久了，让他快点还。",
+      el:{ C:"我是一家设计公司的财务经理。对方是合作了 5 年的老客户，最近可能资金周转困难，拖欠了 3 个月服务费，共 8.6 万元。",
+           O:"目标：提醒对方尽快付款，但不能破坏长期合作关系，要表达理解。",
+           S:"风格：商务、专业、共情。",
+           T:"语调：柔中带刚，委婉但坚定。",
+           A:"受众：对方公司的总经理张总（要给对方留面子）。",
+           R:"格式：标准商务邮件，包含问候语、事实陈述、付款方式和期限。" },
+      build:function (f) {
+        var s = f.A ? "尊敬的张总：\n您好！" : (f.S ? "尊敬的客户：\n您好！" : "你好，");
+        if (f.C) s += "我们非常珍惜过去五年的合作。";
+        s += f.C ? "截至目前，贵司有 3 个月的服务费共计 8.6 万元尚未支付。" : "你们欠的款项已经拖了很久了。";
+        if (f.O) s += f.C ? "我们也理解贵司近期可能面临资金安排上的压力。" : "我们理解您可能有一些困难。";
+        if (f.T) s += "为保证双方合作顺利进行，烦请安排财务部门" + (f.R ? "于本月 30 日前完成支付。" : "尽快完成支付。");
+        else s += f.S ? "请贵司尽快付款。" : "请马上还钱，否则我们将采取法律手段！";
+        if (f.R) s += "\n付款账户信息见附件账单；如需分期安排，欢迎随时与我联系。";
+        if (f.O) s += "\n期待与贵司继续携手合作！";
+        if (f.R || f.S) s += "\n\n此致\n敬礼\n\n××设计公司 财务部";
+        return s;
+      } }
+  ];
+  var cur = 0, on = {};
+  function $(id) { return document.getElementById(id); }
+  function render() {
+    var sc = SC[cur], any = KEYS.some(function (k) { return on[k]; });
+    $("els").innerHTML = KEYS.map(function (k) { return '<div class="el' + (on[k] ? " on" : "") + '" data-k="' + k + '"><b>' + k + "</b> " + NAMES[k] + "</div>"; }).join("");
+    document.querySelectorAll(".el").forEach(function (d) { d.onclick = function () { on[d.dataset.k] = !on[d.dataset.k]; render(); }; });
+    $("pr").textContent = any ? KEYS.filter(function (k) { return on[k]; }).map(function (k) { return "【" + k + " " + NAMES[k] + "】" + sc.el[k]; }).join("\n") + "\n请据此完成写作。" : sc.base;
+    $("out").textContent = sc.build(on);
+    var n = KEYS.filter(function (k) { return on[k]; }).length;
+    $("score").textContent = "满足 " + n + " / 6 项";
+    $("chk").innerHTML = KEYS.map(function (k) { return '<div class="chk">' + (on[k] ? '<span class="ok">✓</span> ' : '<span class="bad">✗</span> ') + CHECK[k] + (on[k] ? "" : '<span style="color:var(--muted)">（勾选 ' + k + " " + NAMES[k] + " 试试）</span>") + "</div>"; }).join("");
+  }
+  $("sc").innerHTML = '<span class="lbl">场景：</span>' + SC.map(function (s, i) { return '<button data-i="' + i + '">' + s.name + "</button>"; }).join("");
+  document.querySelectorAll("#sc button").forEach(function (b) { b.onclick = function () { cur = +b.dataset.i; on = {}; document.querySelectorAll("#sc button").forEach(function (x) { x.classList.toggle("on", x === b); }); render(); }; });
+  $("none").onclick = function () { on = {}; render(); };
+  $("allon").onclick = function () { KEYS.forEach(function (k) { on[k] = true; }); render(); };
+  document.querySelector("#sc button").classList.add("on");
+  render();
+})();
+</script>
+<script src="../common/sim.js"></script>
+</body>
+</html>

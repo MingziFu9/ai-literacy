@@ -1,13 +1,13 @@
 ---
 title: 温度与采样
-description: 调节温度、Top-k、Top-p，看语言模型给出的下一个字的概率怎样变化，抽一抽看实际选出的字（第 5 章）
+description: 调节温度、Top-k、Top-p，看语言模型给出的下一个字的概率怎样变化，抽一抽看实际选出的字（第 3 章）
 ---
 
 # 温度与采样
 
 <iframe class="sim-frame" src="main.html" height="640" loading="lazy" title="温度与采样"></iframe>
 
-[全屏打开](main.html){ target=_blank } · 对应教材：[5.3.1 语言模型](../../chapters/05-nlp-llm/index.md#531)、[5.3.4 温度](../../chapters/05-nlp-llm/index.md#534)、[体验 5-2](../../chapters/05-nlp-llm/index.md#5-2)
+[全屏打开](main.html){ target=_blank } · 对应教材：[3.3.1 第一阶段](../../chapters/03-language/3-3.md#331)
 
 ## 教学说明
 

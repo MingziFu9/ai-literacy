@@ -1,13 +1,13 @@
 ---
 title: 手写数字识别
-description: 写一个数字，看训练好的神经网络怎样把它缩成 8 × 8 图像、经过隐藏层，给出 10 个数字的概率（第 4 章）
+description: 写一个数字，看训练好的神经网络怎样把它缩成 8 × 8 图像、经过隐藏层，给出 10 个数字的概率（第 2 章）
 ---
 
 # 手写数字识别
 
 <iframe class="sim-frame" src="main.html" height="680" loading="lazy" title="手写数字识别"></iframe>
 
-[全屏打开](main.html){ target=_blank } · 对应教材：[4.2.4 深度学习](../../chapters/04-deep-learning/index.md#424)、[4.3.4 训练轮次与过拟合](../../chapters/04-deep-learning/index.md#434)、[4.7.4 读懂手写的字](../../chapters/04-deep-learning/index.md#474)、[体验 4-2](../../chapters/04-deep-learning/index.md#4-2)
+[全屏打开](main.html){ target=_blank } · 对应教材：[2.1.1 深度特稿](../../chapters/02-ml-logic/2-1.md#211)
 
 ## 教学说明
 
@@ -28,5 +28,5 @@ description: 写一个数字，看训练好的神经网络怎样把它缩成 8 �
 **课堂用法建议**
 
 1. 先点几次“换一个样例”，再让每位学生写 0～9，统计全班的识别准确率，和 97.8% 比较，讨论为什么会有差距。
-2. 请学生故意写歪、写小，观察把握的变化，联系 4.7.4 节“把握不大的交给人”的复核规则。
+2. 请学生故意写歪、写小，观察把握的变化，讨论“把握不大的交给人复核”的做法。
 3. 让学生写两次同一个数字，比较隐藏层深色方块的位置，体会隐藏层学到的是“特征”。

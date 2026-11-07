@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>差分隐私：给统计结果加噪声</title>
+<link rel="stylesheet" href="../common/sim.css">
+<style>
+  .stu { display:inline-block; width:58px; text-align:center; font-size:12px; padding:3px; margin:2px; border:1px solid var(--line); border-radius:6px; }
+  .stu.t { border-color:var(--warn); background:#fff3e0; }
+  .stu.gone { opacity:.3; }
+  svg.hist { width:100%; height:120px; }
+  .sl { display:grid; grid-template-columns:7em 1fr 4em; gap:6px; align-items:center; font-size:13px; }
+</style>
+</head>
+<body>
+<h1>差分隐私：怎样公布平均分，又不泄露某个人的成绩？</h1>
+<div class="sub">某班 20 位同学参加了考试。学校每次公布全班平均分。小林转学走了，学校又公布了一次。坏人能从两次平均分的差别里算出小林的成绩吗？</div>
+<div class="box"><h2>全班成绩（只有老师能看到）</h2><div id="cls"></div></div>
+<div class="row"><label><input type="checkbox" id="noise"> 发布时加拉普拉斯噪声</label></div>
+<div class="sl"><span>隐私预算 ε</span><input type="range" id="eps" min="-1" max="1" step="0.5" value="0" disabled><b id="ev"></b></div>
+<div class="row ex"><span class="lbl">ε 越小，噪声越大，隐私越强：</span><button data-e="-1">ε = 0.1</button><button data-e="0">ε = 1</button><button data-e="1">ε = 10</button></div>
+<div class="grid2">
+  <div class="box">
+    <h2>① 差分攻击</h2>
+    <div class="row"><button class="main" id="atk">公布两次平均分，并推算小林的成绩</button></div>
+    <div id="atkOut" class="msg"></div>
+  </div>
+  <div class="box">
+    <h2>② 同一个平均分，发布 20 次</h2>
+    <div class="row"><button id="pub">发布 20 次</button><button id="clr">清空</button></div>
+    <svg class="hist" id="hist" viewBox="0 0 320 120"></svg>
+    <div id="pubOut" class="note"></div>
+  </div>
+</div>
+<div class="msg" id="msg"></div>
+<div class="note">原理：一个人的成绩最多能让 20 人的平均分改变 100 ÷ 20 = 5 分（这叫“敏感度”）。拉普拉斯机制按“敏感度 ÷ ε”的大小加随机噪声，让“有小林”和“没有小林”两种情况下公布的结果看起来差不多，于是无法反推出他的成绩。</div>
+
+<script>
+(function () {
+  var NAMES = ["小林","小王","小张","小李","小赵","小陈","小刘","小杨","小黄","小周","小吴","小徐","小孙","小马","小朱","小胡","小郭","小何","小高","小罗"];
+  var SC = [92,78,85,66,73,88,59,81,70,95,64,77,83,69,90,72,75,61,86,79];
+  var pubs = [];
+  function $(id) { return document.getElementById(id); }
+  function eps() { return Math.pow(10, +$("eps").value); }
+  function lap(b) { var u = Math.random() - 0.5; return -b * Math.sign(u) * Math.log(1 - 2 * Math.abs(u)); }
+  function avg(arr) { return arr.reduce(function (a, b) { return a + b; }, 0) / arr.length; }
+  function release(arr) { var a = avg(arr); return $("noise").checked ? a + lap(100 / arr.length / eps()) : a; }
+  function cls(gone) { $("cls").innerHTML = NAMES.map(function (n, i) { return '<span class="stu' + (i === 0 ? " t" : "") + (gone && i === 0 ? " gone" : "") + '">' + n + "<br><b>" + SC[i] + "</b></span>"; }).join(""); }
+  function ui() {
+    var on = $("noise").checked; $("eps").disabled = !on;
+    $("ev").textContent = on ? (eps() < 1 ? eps().toFixed(1) : eps().toFixed(0)) : "—";
+    var b = 100 / 20 / eps();
+    $("msg").innerHTML = on ? "现在每次发布都加噪声，噪声的“尺度”约为 " + b.toFixed(b < 1 ? 2 : 1) + " 分。" + (eps() <= 0.1 ? "隐私保护很强，但发布的平均分也很不准。" : eps() >= 10 ? "噪声很小，平均分很准，但隐私保护很弱。" : "在隐私和准确之间取得平衡。") : "现在发布的是准确的平均分。";
+  }
+  $("atk").onclick = function () {
+    var a20 = release(SC), a19 = release(SC.slice(1)), guess = 20 * a20 - 19 * a19;
+    cls(true);
+    $("atkOut").innerHTML = "第一次（20 人）：<b>" + a20.toFixed(2) + "</b> 分<br>小林转学后（19 人）：<b>" + a19.toFixed(2) + "</b> 分<br>推算：20 × " + a20.toFixed(2) + " − 19 × " + a19.toFixed(2) + " = <b>" + guess.toFixed(1) + "</b> 分<br>" +
+      (Math.abs(guess - 92) < 1 ? '<span class="bad">小林的真实成绩是 92 分，被准确推算出来了！</span>' : Math.abs(guess - 92) < 10 ? '<span style="color:var(--warn)">和真实成绩 92 分相差 ' + Math.abs(guess - 92).toFixed(1) + " 分，仍然泄露了大概范围。</span>" : Math.abs(guess - 92) < 30 ? '<span style="color:var(--warn)">和真实成绩 92 分相差 ' + Math.abs(guess - 92).toFixed(0) + " 分。单次推算不准，但如果坏人能拿到很多次发布结果，取平均后仍可能逼近真实成绩。所以每次发布都要消耗“隐私预算”，总量用完就不能再发布。</span>" : '<span class="ok">和真实成绩 92 分相差 ' + Math.abs(guess - 92).toFixed(0) + " 分，推算结果毫无意义，隐私被保护住了。</span>");
+  };
+  function hist() {
+    var lo = 40, hi = 120, s = '<line x1="10" y1="100" x2="310" y2="100" stroke="#90a4ae"/>', x = function (v) { return 10 + (Math.max(lo, Math.min(hi, v)) - lo) / (hi - lo) * 300; };
+    for (var v = 40; v <= 120; v += 20) s += '<text x="' + x(v) + '" y="114" font-size="10" text-anchor="middle">' + v + "</text>";
+    var tv = avg(SC); s += '<line x1="' + x(tv) + '" y1="10" x2="' + x(tv) + '" y2="100" stroke="#43a047" stroke-dasharray="4 3"/><text x="' + x(tv) + '" y="9" font-size="10" text-anchor="middle" fill="#43a047">真实 ' + tv.toFixed(1) + "</text>";
+    var bins = {}; pubs.forEach(function (p) { var k = Math.round(x(p) / 6); bins[k] = (bins[k] || 0) + 1; s += '<circle cx="' + (k * 6) + '" cy="' + (100 - bins[k] * 7) + '" r="3" fill="#3f51b5"/>'; });
+    $("hist").innerHTML = s;
+    if (pubs.length) { var m = avg(pubs), sd = Math.sqrt(avg(pubs.map(function (p) { return (p - m) * (p - m); }))); $("pubOut").innerHTML = "共发布 " + pubs.length + " 次，结果大约在 " + (m - 2 * sd).toFixed(1) + " ～ " + (m + 2 * sd).toFixed(1) + " 分之间波动（超出 40～120 的画在边上）。"; } else $("pubOut").innerHTML = "";
+  }
+  $("pub").onclick = function () { for (var i = 0; i < 20; i++) pubs.push(release(SC)); hist(); };
+  $("clr").onclick = function () { pubs = []; hist(); };
+  $("noise").onchange = function () { pubs = []; hist(); ui(); $("atkOut").innerHTML = ""; cls(false); };
+  $("eps").oninput = function () { pubs = []; hist(); ui(); };
+  document.querySelectorAll("[data-e]").forEach(function (b) { b.onclick = function () { $("noise").checked = true; $("eps").value = b.dataset.e; pubs = []; hist(); ui(); }; });
+  cls(false); ui(); hist();
+})();
+</script>
+<script src="../common/sim.js"></script>
+</body>
+</html>
