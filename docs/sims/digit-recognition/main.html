@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>手写数字识别</title>
+<link rel="stylesheet" href="../common/sim.css">
+<style>
+  .wrap { display:grid; grid-template-columns:auto 1fr; gap:14px; align-items:start; }
+  @media (max-width:600px) { .wrap { grid-template-columns:1fr; } }
+  #pad { width:240px; height:240px; border:2px solid var(--accent); border-radius:8px; touch-action:none; cursor:crosshair; background:#fff; display:block; }
+  .small { display:flex; gap:10px; align-items:flex-start; margin-top:6px; }
+  #in8 { width:96px; height:96px; image-rendering:pixelated; border:1px solid var(--line); }
+  .barrow { grid-template-columns:2em 1fr 4em; }
+  .barrow.top .bar { background:var(--warn); }
+  .barrow.top { font-weight:bold; }
+  #hid { display:grid; grid-template-columns:repeat(16,1fr); gap:2px; margin-top:4px; }
+  #hid span { aspect-ratio:1; border-radius:2px; background:#eceff1; }
+</style>
+</head>
+<body>
+<h1>手写数字识别：一个小小的神经网络</h1>
+<div class="sub">在左边方框里用鼠标或手指写一个 0～9 的数字（写大一点、写在中间）。网络把它缩成 8 × 8 = 64 个像素，经过 48 个隐藏神经元，输出 10 个数字各自的概率。</div>
+<div class="wrap">
+  <div>
+    <canvas id="pad" width="240" height="240" aria-label="写字板"></canvas>
+    <div class="row"><button class="main" id="clear">清空</button><button id="sample">换一个样例</button><label class="lbl"><input type="checkbox" id="thick" checked> 粗笔</label></div>
+    <div class="small"><canvas id="in8" width="8" height="8"></canvas><div class="note" style="margin:0">网络“看到”的 8 × 8 图像：<br>64 个数，0（白）到 1（黑），<br>就是 64 个输入神经元。</div></div>
+  </div>
+  <div>
+    <div class="box"><h2>输出层：10 个数字的概率</h2><div id="out"></div></div>
+    <div class="box"><h2>隐藏层：48 个神经元的激活程度（越深越“兴奋”）</h2><div id="hid"></div></div>
+    <div class="box"><div class="msg" id="msg"></div></div>
+  </div>
+</div>
+<div class="note" id="info"></div>
+<script src="weights.js"></script>
+<script>
+(function () {
+  var pad = document.getElementById("pad"), ctx = pad.getContext("2d"), small = document.getElementById("in8"), sctx = small.getContext("2d");
+  var drawing = false, last = null, inked = false, si = 0;
+  document.getElementById("info").textContent = "说明：网络用 scikit-learn 自带的手写数字数据集训练（1797 张 8 × 8 图像），在 " + NET.ntest + " 张没参与训练的测试图像上的准确率为 " + (NET.acc * 100).toFixed(1) + "%。它只见过这个数据集里的写法，你写的字和它们差别太大时会认错。";
+  function pos(e) { var r = pad.getBoundingClientRect(), t = e.touches ? e.touches[0] : e; return [(t.clientX - r.left) * pad.width / r.width, (t.clientY - r.top) * pad.height / r.height]; }
+  function down(e) { e.preventDefault(); drawing = true; last = pos(e); dot(last); }
+  function move(e) { if (!drawing) return; e.preventDefault(); var p = pos(e); ctx.lineWidth = document.getElementById("thick").checked ? 22 : 13; ctx.lineCap = "round"; ctx.strokeStyle = "#000"; ctx.beginPath(); ctx.moveTo(last[0], last[1]); ctx.lineTo(p[0], p[1]); ctx.stroke(); last = p; inked = true; run(); }
+  function dot(p) { ctx.fillStyle = "#000"; ctx.beginPath(); ctx.arc(p[0], p[1], (document.getElementById("thick").checked ? 22 : 13) / 2, 0, 7); ctx.fill(); inked = true; run(); }
+  function up() { drawing = false; }
+  pad.addEventListener("mousedown", down); pad.addEventListener("mousemove", move); window.addEventListener("mouseup", up);
+  pad.addEventListener("touchstart", down, { passive:false }); pad.addEventListener("touchmove", move, { passive:false }); pad.addEventListener("touchend", up);
+
+  // 预处理：裁出笔迹、按比例放进 32×32 方框中间，再按 4×4 小块求平均得到 8×8（与数据集的做法一致）
+  function toInput() {
+    var img = ctx.getImageData(0, 0, pad.width, pad.height).data, x0 = 1e9, y0 = 1e9, x1 = -1, y1 = -1;
+    for (var y = 0; y < pad.height; y++) for (var x = 0; x < pad.width; x++) if (img[(y * pad.width + x) * 4 + 3] > 40) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+    if (x1 < 0) return null;
+    var w = x1 - x0 + 1, h = y1 - y0 + 1, s = 30 / Math.max(w, h), tw = w * s, th = h * s;
+    var c = document.createElement("canvas"); c.width = c.height = 32; var cc = c.getContext("2d");
+    cc.drawImage(pad, x0, y0, w, h, (32 - tw) / 2, (32 - th) / 2, tw, th);
+    var d = cc.getImageData(0, 0, 32, 32).data, a = [], v = [];
+    for (var i = 0; i < 1024; i++) a.push(d[i * 4 + 3] / 255);
+    // 按“重心”而不是外框居中，避免“1”的小钩把竖笔挤到一边
+    var mx = 0, my = 0, ms = 0;
+    a.forEach(function (q, i) { mx += q * (i % 32); my += q * Math.floor(i / 32); ms += q; });
+    var sx = Math.round(15.5 - mx / ms), sy = Math.round(15.5 - my / ms), b2 = a.map(function () { return 0; });
+    a.forEach(function (q, i) { var X = i % 32 + sx, Y = Math.floor(i / 32) + sy; if (X >= 0 && Y >= 0 && X < 32 && Y < 32) b2[Y * 32 + X] = q; });
+    a = b2;
+    // 数据集里的笔画较粗（约占字高的四分之一），把笔迹向四周加粗 2 像素
+    var R = 2, t = a.map(function (_, i) { var x = i % 32, y = (i - x) / 32, m = 0;
+      for (var dy = -R; dy <= R; dy++) for (var dx = -R; dx <= R; dx++) { if (dx * dx + dy * dy > R * R + 1) continue; var X = x + dx, Y = y + dy; if (X >= 0 && Y >= 0 && X < 32 && Y < 32) m = Math.max(m, a[Y * 32 + X]); } return m; });
+    for (var by = 0; by < 8; by++) for (var bx = 0; bx < 8; bx++) {
+      var sum = 0; for (var yy = 0; yy < 4; yy++) for (var xx = 0; xx < 4; xx++) sum += t[(by * 4 + yy) * 32 + bx * 4 + xx];
+      v.push(Math.min(1, sum / 16));
+    }
+    return v;
+  }
+  function forward(x) {
+    var h = NET.b1.map(function (b, j) { var z = b; for (var i = 0; i < 64; i++) z += x[i] * NET.W1[i][j]; return Math.max(0, z); });
+    var z = NET.b2.map(function (b, k) { var s = b; for (var j = 0; j < h.length; j++) s += h[j] * NET.W2[j][k]; return s; });
+    var m = Math.max.apply(null, z), e = z.map(function (v) { return Math.exp(v - m); }), t = e.reduce(function (a, b) { return a + b; }, 0);
+    return { h:h, p:e.map(function (v) { return v / t; }) };
+  }
+  function show(x, truth) {
+    var im = sctx.createImageData(8, 8);
+    x.forEach(function (v, i) { var g = 255 - Math.round(v * 255); im.data[i * 4] = im.data[i * 4 + 1] = im.data[i * 4 + 2] = g; im.data[i * 4 + 3] = 255; });
+    sctx.putImageData(im, 0, 0);
+    var r = forward(x), best = r.p.indexOf(Math.max.apply(null, r.p));
+    document.getElementById("out").innerHTML = r.p.map(function (p, k) {
+      return "<div class='barrow" + (k === best ? " top" : "") + "'><span>" + k + "</span><div><div class='bar' style='width:" + (p * 100).toFixed(1) + "%'></div></div><span class='v'>" + (p * 100).toFixed(1) + "%</span></div>";
+    }).join("");
+    var hm = Math.max.apply(null, r.h) || 1;
+    document.getElementById("hid").innerHTML = r.h.map(function (v) { return "<span title='" + v.toFixed(2) + "' style='background:rgba(63,81,181," + (v / hm).toFixed(2) + ")'></span>"; }).join("");
+    var conf = r.p[best];
+    document.getElementById("msg").innerHTML = "网络认为这是 <b class='big'>" + best + "</b>（把握 " + (conf * 100).toFixed(0) + "%）" +
+      (truth !== undefined ? "。这是测试集里的样例，正确答案是 " + truth + (truth === best ? "，<span class='ok'>认对了</span>。" : "，<span class='bad'>认错了</span>。") :
+       conf < 0.6 ? "。把握不大，第二可能是 " + r.p.map(function (p, k) { return [p, k]; }).sort(function (a, b) { return b[0] - a[0]; })[1][1] + "。试着写得更端正一些。" : "。");
+  }
+  function run() { var x = toInput(); if (x) show(x); }
+  function clear() { ctx.clearRect(0, 0, pad.width, pad.height); inked = false; sctx.clearRect(0, 0, 8, 8); document.getElementById("out").innerHTML = ""; document.getElementById("hid").innerHTML = ""; document.getElementById("msg").textContent = "在方框里写一个数字。"; }
+  document.getElementById("clear").onclick = clear;
+  document.getElementById("sample").onclick = function () {
+    ctx.clearRect(0, 0, pad.width, pad.height);
+    var s = NET.samples[si++ % NET.samples.length];
+    for (var i = 0; i < 64; i++) { ctx.fillStyle = "rgba(0,0,0," + s.x[i] + ")"; ctx.fillRect((i % 8) * 30, Math.floor(i / 8) * 30, 30, 30); }
+    show(s.x, s.y);
+  };
+  clear();
+})();
+</script>
+<script src="../common/sim.js"></script>
+</body>
+</html>

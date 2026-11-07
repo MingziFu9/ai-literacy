@@ -1,0 +1,150 @@
+# ============================================================
+# 课程配置：全书唯一需要手改的配置文件
+# 改完后运行  python tools/course.py sync
+# 本书底本是已出版的《人工智能通识教程》（吴迪、龚志武主编，东南大学出版社，2026），
+# 章节结构与原书一致，每章拆成多页：章首页 index.md、每节一页（pages）、本章实验 labs.md、本章小结与练习 summary.md
+# ============================================================
+
+title: 人工智能通识教程
+description: 面向全体专科、本科学生（含非人工智能专业）的《人工智能通识教程》网络教材，与东南大学出版社 2026 年版纸质教材配套，含交互动画、在线体验、课件和教案
+audience: 全体专科、本科学生（含非人工智能、非理工专业），零基础
+github_user: MingziFu9
+repo: ai-literacy
+
+credits: 2
+hours: {theory: 36, lab: 0}           # 全部为理论学时：线上 28 + 线下 8（每章 1 次面授）
+semester: 1
+exam: 开卷或闭卷（由任课教师定）
+labs_per_chapter: 2                   # 每章 2～3 个在线体验（不占实验学时）
+lab_section: 在线体验
+lab_word: 体验
+frontier_title: 前沿视窗
+certificates: []
+
+chapters:
+  - dir: 01-ai-intro
+    title: AI导论：掀开智能的神秘面纱
+    short: AI 导论
+    theory: 5
+    offline: 1
+    lab: 0
+    labs: 2
+    pages:
+      - {file: 1-1.md, title: "1.1 什么是AI：四种定义的智慧交锋"}
+      - {file: 1-2.md, title: "1.2 AI进化史：三次浪潮与三大流派"}
+      - {file: 1-3.md, title: "1.3 AI的进化路线：从慢跑到奇点爆炸"}
+      - {file: 1-4.md, title: "1.4 祛魅大模型：支撑奇点的三大底层支柱"}
+      - {file: 1-5.md, title: "1.5 生成式AI全景图：多模态的交响乐"}
+      - {file: 1-6.md, title: "1.6 人机交互新范式：提示词与Agent"}
+      - {file: 1-7.md, title: "1.7 风险与挑战：潘多拉魔盒"}
+  - dir: 02-ml-logic
+    title: 机器学习的底层逻辑：从猫狗识别到深度推理
+    short: 机器学习的底层逻辑
+    theory: 5
+    offline: 1
+    lab: 0
+    labs: 2
+    pages:
+      - {file: 2-1.md, title: "2.1 神经网络：非生物的“大脑”"}
+      - {file: 2-2.md, title: "2.2 深度推理：AI的“灵魂觉醒”时刻"}
+      - {file: 2-3.md, title: "2.3 Transformer：开启大模型时代的架构变革"}
+      - {file: 2-4.md, title: "2.4 算法走进现实：AI的应用版图"}
+      - {file: 2-5.md, title: "2.5 深度学习简史：1958—2025"}
+  - dir: 03-language
+    title: 语言智能：与机器对话的艺术
+    short: 语言智能
+    theory: 5
+    offline: 1
+    lab: 0
+    labs: 3
+    pages:
+      - {file: 3-1.md, title: "3.1 语言智能的进化史诗"}
+      - {file: 3-2.md, title: "3.2 机器之魂：Transformer架构详解"}
+      - {file: 3-3.md, title: "3.3 大模型的养成：从“文盲”到“博士”"}
+      - {file: 3-4.md, title: "3.4 群星闪耀：全球大模型竞技场"}
+      - {file: 3-5.md, title: "3.5 提示词工程：自然语言编程"}
+      - {file: 3-6.md, title: "3.6 进阶架构：从聊天到行动"}
+      - {file: 3-7.md, title: "3.7 深度实战演练"}
+      - {file: 3-8.md, title: "3.8 风险与挑战：潘多拉魔盒"}
+  - dir: 04-vision-audio
+    title: 视听觉醒：机器眼中的光与影
+    short: 视听觉醒
+    theory: 4
+    offline: 1
+    lab: 0
+    labs: 3
+    pages:
+      - {file: 4-1.md, title: "4.1 机器之眼：计算机视觉的进化"}
+      - {file: 4-2.md, title: "4.2 创世引擎：从GAN到扩散模型"}
+      - {file: 4-3.md, title: "4.3 听觉智能：机器的耳朵与喉咙"}
+      - {file: 4-4.md, title: "4.4 诸神之战：AIGC工具全景图"}
+      - {file: 4-5.md, title: "4.5 咒语百科：视觉提示词工程"}
+      - {file: 4-6.md, title: "4.6 深度实战演练"}
+      - {file: 4-7.md, title: "4.7 视觉伦理：真假的边界"}
+  - dir: 05-agents
+    title: 从工具到伙伴：智能体（AI Agent）
+    short: 智能体
+    theory: 5
+    offline: 1
+    lab: 0
+    labs: 3
+    pages:
+      - {file: 5-1.md, title: "5.1 智能体概述"}
+      - {file: 5-2.md, title: "5.2 零代码开发"}
+      - {file: 5-3.md, title: "5.3 多智能体系统"}
+      - {file: 5-4.md, title: "5.4 具身智能"}
+  - dir: 06-ai-plus-x
+    title: AI+X：跨界融合与应用爆发
+    short: AI+X
+    theory: 4
+    offline: 1
+    lab: 0
+    labs: 2
+    pages:
+      - {file: 6-1.md, title: "6.1 AI+X的融合逻辑：从“赋能”到“重构”"}
+      - {file: 6-2.md, title: "6.2 AI+探索与创造"}
+      - {file: 6-3.md, title: "6.3 AI+产业与效率"}
+      - {file: 6-4.md, title: "6.4 AI+服务与社会"}
+      - {file: 6-5.md, title: "6.5 成为“AI+X”架构师：你的专业跨界实践"}
+  - dir: 07-safety
+    title: 安全防线：给 AI 装上“刹车”
+    short: AI 安全
+    theory: 4
+    offline: 1
+    lab: 0
+    labs: 2
+    pages:
+      - {file: 7-1.md, title: "7.1 AIGC与Deepfake：输出端的风险"}
+      - {file: 7-2.md, title: "7.2 对抗攻击与提示词注入：输入端的风险"}
+      - {file: 7-3.md, title: "7.3 数据隐私与合规：数据层的风险"}
+      - {file: 7-4.md, title: "7.4 防御体系：系统级的治理"}
+      - {file: 7-5.md, title: "7.5 实战演练"}
+  - dir: 08-ethics
+    title: 伦理边界：人机共存的未来法则
+    short: AI 伦理
+    theory: 4
+    offline: 1
+    lab: 0
+    labs: 2
+    pages:
+      - {file: 8-1.md, title: "8.1 版权之争：谁是缪斯，谁是小偷？"}
+      - {file: 8-2.md, title: "8.2 偏见与公平：算法的“有色眼镜”"}
+      - {file: 8-3.md, title: "8.3 人机关系：是工具，是伙伴，还是替代者？"}
+      - {file: 8-4.md, title: "8.4 治理与未来：如何控制比我们强大的存在？"}
+      - {file: 8-5.md, title: "8.5 行业伦理困境透视：当理论撞上现实"}
+      - {file: 8-6.md, title: "8.6 实战演练：算法偏见审计与伦理设计"}
+
+extra_pages:
+  - {file: tool-snapshot.md, title: 工具快照（截至 2026 年 11 月）}
+  - {file: mock-exam.md, title: 期末复习与模拟卷}
+  - {file: errata.md, title: 网络版与纸质版对照}
+
+appendices:
+  - {file: a-laws.md, title: 核心法律法规必读}
+  - {file: b-references.md, title: 参考文献}
+  - {file: glossary.md, title: 术语表}
+
+lesson_plan:
+  online_ratio: 0.78
+  teacher: ""
+  school: 广州开放大学

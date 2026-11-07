@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>梯度下降：蒙着眼睛下山</title>
+<link rel="stylesheet" href="../common/sim.css">
+<style>
+  svg { width:100%; display:block; background:#fafafa; border:1px solid var(--line); border-radius:6px; touch-action:none; }
+  .lr { min-width:3.2em; font-weight:bold; color:var(--accent); }
+  .tbl { max-height:120px; overflow:auto; }
+</style>
+</head>
+<body>
+<h1>梯度下降：蒙着眼睛下山</h1>
+<div class="sub">曲线是损失函数：横轴是模型的一个参数 w，纵轴是损失（模型错得有多厉害）。小球只能感觉到脚下的坡度，每一步都往下坡方向挪一点：新的 w = 旧的 w − 学习率 × 坡度。点曲线可以把小球放到别处。</div>
+
+<div class="row tabs" id="curves"><button data-c="0" class="on">一个山谷</button><button data-c="1">两个山谷</button></div>
+<svg id="sv" viewBox="0 0 600 300" aria-label="损失曲线"></svg>
+<div class="row"><span>学习率</span><input type="range" id="lr" min="0.05" max="2.3" step="0.05" value="0.3" aria-label="学习率"><span class="lr" id="lrv"></span></div>
+<div class="row ex"><span class="lbl">试一试：</span><button data-lr="0.1">0.1（小步慢走）</button><button data-lr="0.6">0.6</button><button data-lr="1.9">1.9（来回跳）</button><button data-lr="2.2">2.2（冲过头）</button></div>
+<div class="row"><button class="main" id="step">走一步</button><button id="run">走 10 步</button><button id="reset">回到起点</button></div>
+<div class="grid2">
+  <div class="box"><div class="msg" id="msg"></div></div>
+  <div class="box"><h2>每一步的损失</h2><svg id="hist" viewBox="0 0 300 110"></svg></div>
+</div>
+<div class="note">说明：真实的神经网络有成千上万甚至上千亿个参数，“山”是在高维空间里的，没法画出来，但每一步做的事情一样：算出每个参数方向上的坡度（梯度），往下坡方向挪一小步。算坡度的方法就是反向传播。</div>
+<script>
+(function () {
+  var C = [
+    { f:function (w) { return 0.5 * (w - 2) * (w - 2) + 1; }, d:function (w) { return w - 2; }, x0:-3, x1:7, y0:0, y1:14, start:-2.2,
+      say:"只有一个最低点（w = 2，损失 = 1）。" },
+    { f:function (w) { return w * w * w * w / 20 - w * w + w / 2 + 6; }, d:function (w) { return w * w * w / 5 - 2 * w + 0.5; }, x0:-4, x1:4, y0:0, y1:14, start:3.6,
+      say:"有两个山谷：右边浅（局部最低点），左边深（全局最低点）。从右边出发，小步走会停在右边的浅谷里。" }
+  ];
+  var ci = 0, w, hist, sv = document.getElementById("sv"), lrIn = document.getElementById("lr");
+  function c() { return C[ci]; }
+  function X(v) { return 30 + (v - c().x0) / (c().x1 - c().x0) * 555; }
+  function Y(v) { return 280 - (Math.min(v, c().y1) - c().y0) / (c().y1 - c().y0) * 265; }
+  function reset() { w = c().start; hist = [c().f(w)]; draw("小球在起点。点“走一步”。" + c().say); }
+  function step() {
+    var lr = +lrIn.value, g = c().d(w), nw = w - lr * g;
+    var s = "坡度 = " + g.toFixed(3) + "，新的 w = " + w.toFixed(3) + " − " + lr + " × (" + g.toFixed(3) + ") = " + nw.toFixed(3) + "。";
+    w = nw; hist.push(c().f(w));
+    if (!isFinite(w) || Math.abs(w) > 50) { w = Math.sign(w) * 50; s += "<br><b class='bad'>小球飞出去了！学习率太大，每一步都冲过头，而且越冲越远（发散）。</b>"; }
+    else if (Math.abs(c().d(w)) < 0.01) s += "<br><b class='ok'>坡度几乎为 0，到达谷底附近，训练收敛了。</b>";
+    else if (hist.length > 2 && hist[hist.length - 1] > hist[hist.length - 2]) s += "<br><span class='bad'>损失反而变大了：这一步迈得太大，跳到了对面的山坡上。</span>";
+    draw(s);
+  }
+  function draw(m) {
+    var a = c(), p = [];
+    for (var v = a.x0; v <= a.x1 + 1e-9; v += (a.x1 - a.x0) / 200) p.push(X(v).toFixed(1) + "," + Y(a.f(v)).toFixed(1));
+    var s = '<line x1="30" y1="280" x2="585" y2="280" stroke="#90a4ae"/><line x1="30" y1="15" x2="30" y2="280" stroke="#90a4ae"/>' +
+      '<text x="585" y="296" font-size="12" text-anchor="end" fill="#78909c">参数 w</text><text x="34" y="14" font-size="12" fill="#78909c">损失</text>' +
+      '<polyline points="' + p.join(" ") + '" fill="none" stroke="#3f51b5" stroke-width="2.5"/>';
+    for (var t = Math.ceil(a.x0); t <= a.x1; t++) s += '<text x="' + X(t) + '" y="294" font-size="10" text-anchor="middle" fill="#90a4ae">' + t + "</text>";
+    // 走过的路径
+    var path = [], ww = a.start;
+    var lr = +lrIn.value;
+    for (var k = 0; k < hist.length; k++) { if (Math.abs(ww) <= 50) path.push([ww, a.f(ww)]); ww = ww - lr * a.d(ww); }
+    path.forEach(function (q, k) { if (k && q[0] >= a.x0 && q[0] <= a.x1 && path[k - 1][0] >= a.x0 && path[k - 1][0] <= a.x1) s += '<line x1="' + X(path[k - 1][0]) + '" y1="' + Y(path[k - 1][1]) + '" x2="' + X(q[0]) + '" y2="' + Y(q[1]) + '" stroke="#ef6c00" stroke-width="1.5" stroke-dasharray="4 3"/>'; });
+    if (w >= a.x0 && w <= a.x1) {
+      var g = a.d(w), dx = 0.8;
+      s += '<line x1="' + X(w - dx) + '" y1="' + Y(a.f(w) - g * dx) + '" x2="' + X(w + dx) + '" y2="' + Y(a.f(w) + g * dx) + '" stroke="#e53935" stroke-width="2"/>';
+      s += '<circle cx="' + X(w) + '" cy="' + (Y(a.f(w)) - 9) + '" r="9" fill="#ef6c00" stroke="#fff" stroke-width="2"/>';
+    }
+    sv.innerHTML = s;
+    document.getElementById("lrv").textContent = (+lrIn.value).toFixed(2);
+    var hm = Math.max.apply(null, hist.map(function (v) { return Math.min(v, 40); })), hs = '<line x1="20" y1="100" x2="295" y2="100" stroke="#90a4ae"/>';
+    hist.forEach(function (v, k) { var x = 20 + k * Math.min(25, 270 / Math.max(1, hist.length - 1)), h = Math.min(v, 40) / hm * 88; hs += '<rect x="' + (x - 3) + '" y="' + (100 - h) + '" width="6" height="' + h + '" fill="#3f51b5"/>'; });
+    hs += '<text x="22" y="10" font-size="10" fill="#78909c">第 0～' + (hist.length - 1) + ' 步，现在损失 = ' + (isFinite(hist[hist.length - 1]) ? hist[hist.length - 1].toFixed(3) : "∞") + "</text>";
+    document.getElementById("hist").innerHTML = hs;
+    document.getElementById("msg").innerHTML = "第 " + (hist.length - 1) + " 步：w = " + w.toFixed(3) + "，损失 = " + a.f(w).toFixed(3) + "<br>" + m;
+  }
+  sv.addEventListener("click", function (e) {
+    var r = sv.getBoundingClientRect(), x = (e.clientX - r.left) * 600 / r.width, v = c().x0 + (x - 30) / 555 * (c().x1 - c().x0);
+    if (v < c().x0 || v > c().x1) return; C[ci].start = v; reset();
+  });
+  document.getElementById("step").onclick = step;
+  document.getElementById("run").onclick = function () { for (var k = 0; k < 10; k++) step(); };
+  document.getElementById("reset").onclick = reset;
+  lrIn.oninput = reset;
+  document.querySelectorAll("[data-lr]").forEach(function (b) { b.onclick = function () { lrIn.value = b.dataset.lr; reset(); }; });
+  document.querySelectorAll("#curves button").forEach(function (b) { b.onclick = function () { ci = +b.dataset.c; document.querySelectorAll("#curves button").forEach(function (o) { o.classList.toggle("on", o === b); }); reset(); }; });
+  reset();
+})();
+</script>
+<script src="../common/sim.js"></script>
+</body>
+</html>

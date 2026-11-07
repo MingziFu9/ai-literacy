@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>信息茧房模拟</title>
+<link rel="stylesheet" href="../common/sim.css">
+<style>
+  .wrap { display:grid; grid-template-columns:minmax(0, 1.15fr) minmax(0, 1fr); gap:10px; }
+  @media (max-width:680px) { .wrap { grid-template-columns:1fr; } }
+  .feed { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+  .card { border:1px solid var(--line); border-radius:8px; padding:6px 8px; font-size:13px; cursor:pointer; background:#fff; transition:background .15s; position:relative; min-height:4.4em; }
+  .card:hover { background:var(--soft); }
+  .card .tp { font-size:11.5px; color:var(--muted); }
+  .card .no { position:absolute; right:4px; top:3px; border:none; background:none; color:#b0bec5; font-size:12px; padding:0 4px; }
+  .card .no:hover { color:var(--neg); }
+  .card.explore { border-style:dashed; border-color:var(--warn); }
+  .sl { display:grid; grid-template-columns:9em 1fr 3em; gap:6px; align-items:center; font-size:13px; }
+  .barrow { grid-template-columns:6.5em 1fr 3.5em; }
+  #chart { width:100%; height:110px; display:block; border:1px solid var(--line); border-radius:4px; }
+  .stats { display:grid; grid-template-columns:repeat(3, 1fr); gap:6px; }
+  .stat { border:1px solid var(--line); border-radius:6px; padding:4px 8px; font-size:12px; }
+  .stat b { display:block; font-size:17px; color:var(--accent); }
+  #topics button { margin:2px 1px; font-size:12px; }
+</style>
+</head>
+<body>
+<h1>信息茧房模拟：推荐系统越来越“懂”你之后</h1>
+<div class="sub">这是一个简化的推荐系统。它一开始不了解你，各类内容都推一点；你<b>点开</b>哪一条，它就认为你喜欢这一类，下次多推这一类。点几十次之后，看看你还能看到多少种内容。也可以点“模拟一个用户”，让电脑替你只点同一类内容。</div>
+
+<div class="wrap">
+  <div>
+    <div class="box" style="margin-top:0">
+      <h2>为你推荐（第 <span id="round">1</span> 轮）</h2>
+      <div class="feed" id="feed"></div>
+      <div class="note">点卡片表示“点开看了”，点右上角 × 表示“不感兴趣”。橙色虚线框是推荐系统为了让你看到新东西，特意加进来的“探索”内容。</div>
+      <div class="row"><button id="skip">都不想看，换一批</button><button id="sim" class="main">模拟一个用户：只点“<span id="favName"></span>”，刷 20 轮</button></div>
+      <div class="row ex"><span class="lbl">模拟用户最爱：</span><select id="fav"></select></div>
+    </div>
+    <div class="box">
+      <h2>打破茧房的办法</h2>
+      <div class="sl"><span>探索比例</span><input type="range" id="explore" min="0" max="0.5" step="0.05" value="0"><b id="ev"></b></div>
+      <div class="sl"><span>迎合程度</span><input type="range" id="power" min="1" max="4" step="0.5" value="2"><b id="pv"></b></div>
+      <div class="note">探索比例：每批推荐中，有多少比例随机推荐你没怎么看过的内容。迎合程度：推荐系统有多“死心眼”地只推你点得多的那几类。</div>
+      <div class="row"><label style="font-size:13px"><input type="checkbox" id="off"> 关闭个性化推荐</label><button id="clear">清除我的推荐记录</button></div>
+      <div class="row ex"><span class="lbl">主动搜索：</span><span id="topics"></span></div>
+    </div>
+  </div>
+  <div>
+    <div class="stats"><div class="stat">已点开<b id="sc">0</b></div><div class="stat">最近 30 条推荐覆盖<b id="sd">—</b></div><div class="stat">第一名所占比例<b id="st">—</b></div></div>
+    <div class="box"><h2>推荐系统认为你的兴趣</h2><div id="bars"></div></div>
+    <div class="box"><h2>最近 30 条推荐里各类内容的数量</h2><div id="mix"></div></div>
+    <div class="box"><h2>每轮推荐覆盖了几类内容</h2><canvas id="chart" width="560" height="110"></canvas></div>
+  </div>
+</div>
+<div class="msg" id="msg"></div>
+
+<script src="../common/sim.js"></script>
+<script>
+(function () {
+  var T = [
+    ["⚽", "体育", ["国足热身赛首发名单公布", "马拉松新手的五个误区", "篮球联赛季后赛对阵出炉", "乒乓球世界杯决赛回顾"]],
+    ["🎮", "游戏", ["这款国产游戏为什么火了", "电竞选手的一天", "十款适合周末的单机游戏", "游戏新版本更新内容汇总"]],
+    ["🍜", "美食", ["十分钟做一碗葱油拌面", "各地早餐大比拼", "空气炸锅的十种用法", "这家老字号开了一百年"]],
+    ["📱", "数码", ["新款手机拍照实测", "平板电脑怎么选", "充电宝能不能带上飞机", "耳机降噪原理图解"]],
+    ["💰", "财经", ["一分钟看懂今年的个税专项扣除", "年轻人的第一份理财计划", "物价指数是怎么算的", "公积金可以用来做什么"]],
+    ["🏥", "健康", ["久坐族的颈椎保护操", "晚上睡不着怎么办", "体检报告里的箭头怎么看", "夏季防中暑小常识"]],
+    ["🌏", "国际", ["一张图看懂本周国际要闻", "各国如何应对人口老龄化", "国际空间站的日常", "世界各地的新年习俗"]],
+    ["📜", "历史", ["故宫的屋顶为什么是黄色", "丝绸之路上的驿站", "古人怎么过夏天", "活字印刷是怎样发明的"]],
+    ["🔬", "科普", ["为什么天空是蓝色的", "人工智能是怎样认出猫的", "月球背面有什么", "雷电是怎么形成的"]],
+    ["🎬", "娱乐", ["本周电影票房榜", "这部剧的拍摄地在哪里", "综艺节目幕后花絮", "明星同款穿搭"]]
+  ];
+  var N = T.length, w, clicks, round, recent, divHist, feed, cnt = 0;
+  function reset(keepHist) { w = T.map(function () { return 1; }); clicks = 0; if (!keepHist) { round = 1; recent = []; divHist = []; } }
+  function P() { return { ex:+document.getElementById("explore").value, pw:+document.getElementById("power").value, off:document.getElementById("off").checked }; }
+  function pick(probs) { var r = Math.random(), s = 0; for (var i = 0; i < probs.length; i++) { s += probs[i]; if (r <= s) return i; } return probs.length - 1; }
+  function makeFeed() {
+    var p = P(), probs, out = [];
+    if (p.off) probs = T.map(function () { return 1 / N; });
+    else { var raw = w.map(function (x) { return Math.pow(x, p.pw); }), s = raw.reduce(function (a, b) { return a + b; }, 0); probs = raw.map(function (x) { return x / s; }); }
+    for (var k = 0; k < 6; k++) {
+      var exp = !p.off && Math.random() < p.ex, t;
+      if (exp) { var inv = w.map(function (x) { return 1 / x; }), si = inv.reduce(function (a, b) { return a + b; }, 0); t = pick(inv.map(function (x) { return x / si; })); }
+      else t = pick(probs);
+      var used = out.filter(function (o) { return o.t === t; }).map(function (o) { return o.title; }), left = T[t][2].filter(function (x) { return used.indexOf(x) < 0; });
+      if (!left.length) left = T[t][2];
+      out.push({ t:t, title:left[Math.floor(Math.random() * left.length)], exp:exp });
+    }
+    feed = out;
+    out.forEach(function (it) { recent.push(it.t); }); if (recent.length > 30) recent = recent.slice(-30);
+    var kinds = {}; out.forEach(function (it) { kinds[it.t] = 1; }); divHist.push(Object.keys(kinds).length); if (divHist.length > 80) divHist.shift();
+  }
+  function render() {
+    document.getElementById("round").textContent = round;
+    document.getElementById("feed").innerHTML = feed.map(function (it, i) {
+      return '<div class="card' + (it.exp ? " explore" : "") + '" data-i="' + i + '"><button class="no" data-n="' + i + '" title="不感兴趣">×</button><div class="tp">' + T[it.t][0] + " " + T[it.t][1] + "</div>" + it.title + "</div>";
+    }).join("");
+    document.querySelectorAll(".card").forEach(function (c) { c.onclick = function (e) { if (e.target.classList.contains("no")) return; click(feed[+c.dataset.i].t, 1); }; });
+    document.querySelectorAll(".card .no").forEach(function (b) { b.onclick = function () { var t = feed[+b.dataset.n].t; w[t] = Math.max(0.2, w[t] * 0.5); msg("已告诉推荐系统：不想看“" + T[t][1] + "”。它会少推这一类。"); next(); }; });
+    var sw = w.reduce(function (a, b) { return a + b; }, 0), order = T.map(function (x, i) { return i; }).sort(function (a, b) { return w[b] - w[a]; });
+    document.getElementById("bars").innerHTML = order.map(function (i) { var pc = w[i] / sw * 100; return '<div class="barrow"><span>' + T[i][0] + " " + T[i][1] + '</span><div><div class="bar" style="width:' + pc.toFixed(1) + '%"></div></div><span class="v">' + pc.toFixed(0) + "%</span></div>"; }).join("");
+    var m = T.map(function () { return 0; }); recent.forEach(function (t) { m[t]++; });
+    var mo = T.map(function (x, i) { return i; }).sort(function (a, b) { return m[b] - m[a]; });
+    document.getElementById("mix").innerHTML = mo.filter(function (i) { return m[i] > 0; }).map(function (i) { return '<div class="barrow"><span>' + T[i][0] + " " + T[i][1] + '</span><div><div class="bar" style="width:' + (m[i] / recent.length * 100).toFixed(1) + '%;background:#7986cb"></div></div><span class="v">' + m[i] + " 条</span></div>"; }).join("") || '<div class="note">还没有推荐。</div>';
+    var kinds = m.filter(function (x) { return x > 0; }).length;
+    document.getElementById("sc").textContent = clicks;
+    document.getElementById("sd").textContent = kinds + " / " + N + " 类";
+    document.getElementById("st").textContent = recent.length ? Math.round(m[mo[0]] / recent.length * 100) + "%" : "—";
+    var cv = document.getElementById("chart"), x = cv.getContext("2d"), W = cv.width, H = cv.height; x.clearRect(0, 0, W, H);
+    x.strokeStyle = "#eceff1"; x.fillStyle = "#90a4ae"; x.font = "11px sans-serif";
+    [1, 3, 6].forEach(function (k) { var y = H - 6 - (k / 6) * (H - 18); x.beginPath(); x.moveTo(0, y); x.lineTo(W, y); x.stroke(); x.fillText(k + " 类", 2, y - 2); });
+    x.strokeStyle = "#3f51b5"; x.lineWidth = 2; x.beginPath();
+    divHist.forEach(function (d, i) { var px = 30 + i / Math.max(1, 79) * (W - 36), py = H - 6 - d / 6 * (H - 18); i ? x.lineTo(px, py) : x.moveTo(px, py); }); x.stroke();
+    document.getElementById("favName").textContent = T[+document.getElementById("fav").value][1];
+    document.getElementById("ev").textContent = Math.round(P().ex * 100) + "%"; document.getElementById("pv").textContent = P().pw;
+  }
+  function msg(s) { document.getElementById("msg").innerHTML = s; }
+  function click(t, k) { w[t] += 1 * k; clicks++; next(); }
+  function next() {
+    round++; makeFeed(); render();
+    var m = T.map(function () { return 0; }); recent.forEach(function (t) { m[t]++; });
+    var top = Math.max.apply(null, m) / Math.max(1, recent.length), kinds = m.filter(function (x) { return x > 0; }).length;
+    if (recent.length >= 24 && top >= 0.7 && !P().off) msg("⚠ 最近的推荐里，七成以上都是同一类内容，只剩 " + kinds + " 类。你已经进入“信息茧房”了。试试右边“打破茧房的办法”。");
+  }
+  document.getElementById("skip").onclick = function () { next(); };
+  document.getElementById("sim").onclick = function () {
+    var fav = +document.getElementById("fav").value, n = 0;
+    for (var r = 0; r < 20; r++) {
+      var hit = feed.filter(function (it) { return it.t === fav; }).length;
+      if (hit) { w[fav] += 1; clicks++; n++; }
+      round++; makeFeed();
+    }
+    render(); msg("模拟用户刷了 20 轮，只点开“" + T[fav][1] + "”的内容，一共点了 " + n + " 次。看看右边：推荐系统认为的兴趣、最近 30 条推荐都变成什么样了？");
+  };
+  document.getElementById("fav").innerHTML = T.map(function (t, i) { return '<option value="' + i + '">' + t[0] + " " + t[1] + "</option>"; }).join("");
+  document.getElementById("fav").onchange = render;
+  document.getElementById("topics").innerHTML = T.map(function (t, i) { return '<button data-t="' + i + '">' + t[0] + " " + t[1] + "</button>"; }).join("");
+  document.querySelectorAll("#topics button").forEach(function (b) { b.onclick = function () { var t = +b.dataset.t; w[t] += 1.5; msg("你主动搜索了“" + T[t][1] + "”，推荐系统会以为你对它也感兴趣。"); next(); }; });
+  document.getElementById("clear").onclick = function () { reset(true); msg("推荐记录已清除，推荐系统重新开始了解你。"); next(); };
+  document.getElementById("off").onchange = function () { msg(this.checked ? "已关闭个性化推荐：现在每一类内容被推荐的机会相同，和你点过什么无关。" : "已打开个性化推荐。"); next(); };
+  ["explore", "power"].forEach(function (id) { document.getElementById(id).oninput = render; });
+  document.getElementById("fav").value = 1;
+  reset(); makeFeed(); render();
+})();
+</script>
+</body>
+</html>

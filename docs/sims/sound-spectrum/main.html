@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>声音的模样：波形与频谱</title>
+<link rel="stylesheet" href="../common/sim.css">
+<style>
+  canvas { width:100%; height:auto; display:block; border:1px solid var(--line); border-radius:4px; background:#fcfcfd; }
+  .sl { display:grid; grid-template-columns:6.5em 1fr 5.5em; gap:6px; align-items:center; font-size:13px; }
+  #sounds button, #rates button, #bits button { margin:2px 1px; }
+  .info { font-size:13px; margin-top:6px; min-height:2.8em; }
+</style>
+</head>
+<body>
+<h1>声音的模样：波形与频谱</h1>
+<div class="sub">选一种声音，上图是它的<b>波形</b>（空气压力随时间的变化，只画了 20 毫秒），下图是它的<b>频谱</b>（这个声音由哪些频率组成、各有多强）。点“播放”可以听（请先调小音量）。</div>
+
+<div class="row ex"><span class="lbl">声音：</span><span id="sounds"></span></div>
+<div class="sl" id="frow"><span>纯音频率</span><input type="range" id="freq" min="100" max="2000" step="10" value="440"><b id="fv"></b></div>
+<div class="sl"><span>音量（振幅）</span><input type="range" id="amp" min="0.1" max="1" step="0.05" value="0.8"><b id="av"></b></div>
+<div class="row"><button class="main" id="play">▶ 播放 1.5 秒</button><button id="mic">🎤 用麦克风</button><span class="note" id="micnote" style="margin:0"></span></div>
+
+<div class="box"><h2>波形：横轴是时间（0～20 毫秒），纵轴是振幅</h2><canvas id="wave" width="760" height="170"></canvas></div>
+<div class="box"><h2>频谱：横轴是频率（0～4000 赫兹），纵轴是强度</h2><canvas id="spec" width="760" height="170"></canvas><div class="info" id="info"></div></div>
+
+<details class="box" id="sampBox">
+  <summary style="cursor:pointer;color:var(--accent);font-weight:600;font-size:13.5px">采样与量化：把连续的声音变成数字</summary>
+  <div class="row ex"><span class="lbl">采样率：</span><span id="rates"></span></div>
+  <div class="row ex"><span class="lbl">量化位数：</span><span id="bits"></span></div>
+  <canvas id="samp" width="760" height="200"></canvas>
+  <div class="info" id="sinfo"></div>
+  <div class="note">为了看清楚，这里用 1000 赫兹的纯音、只画 3 毫秒。灰线是原来的连续声音，圆点是采样得到的数，橙色折线是用这些数“还原”出来的声音。</div>
+</details>
+
+<script src="../common/sim.js"></script>
+<script>
+(function () {
+  var SOUNDS = [
+    { id:"tone", n:"纯音（音叉）", d:"只有一个频率的声音，波形是光滑的正弦曲线，频谱上只有一根竖线。拖动频率滑块，频率越高，音调越高，波形越密。" },
+    { id:"whistle", n:"口哨", d:"口哨接近纯音，频率较高（约 1500 赫兹），还带着一点颤动，频谱上是一根稍微变粗的竖线。" },
+    { id:"a", n:"元音 a", d:"人说“啊”时，声带振动产生一个基频（这里是 130 赫兹）和它的整数倍（谐波），频谱像一排梳齿。口腔形状让某些频率特别强，形成几个“山峰”（共振峰），a 的前两个山峰在约 750 和 1200 赫兹。" },
+    { id:"i", n:"元音 i", d:"同样的基频，说“衣”时嘴型变了，山峰移到约 280 和 2250 赫兹。波形和 a 明显不同，计算机正是靠这些山峰的位置分辨不同的元音。" },
+    { id:"u", n:"元音 u", d:"说“乌”时，山峰在约 320 和 800 赫兹，高频很弱，声音听起来比较“闷”。" },
+    { id:"chord", n:"和弦（do mi sol）", d:"三个音同时响，频谱上有三根竖线（约 262、330、392 赫兹），波形是三条正弦曲线叠加后的样子。" },
+    { id:"noise", n:"噪音（沙沙声）", d:"噪音没有规律，波形杂乱无章，频谱上各个频率都有，像一片平地，没有明显的峰。" }
+  ];
+  var cur = "tone", freq = 440, amp = 0.8;
+  var FORM = { a:[[750, 90, 1], [1200, 110, 0.7], [2600, 160, 0.25]], i:[[280, 60, 1], [2250, 120, 0.55], [3000, 170, 0.35]], u:[[320, 60, 1], [800, 90, 0.6], [2400, 160, 0.08]] };
+  var noiseBuf = null;
+  function vowelAmps(v) {
+    var f0 = 130, list = [];
+    for (var k = 1; k * f0 < 4000; k++) {
+      var f = k * f0, a = 0;
+      FORM[v].forEach(function (F) { a += F[2] / (1 + Math.pow((f - F[0]) / F[1], 2)); });
+      list.push([f, a]);
+    }
+    var m = Math.max.apply(null, list.map(function (x) { return x[1]; }));
+    return list.map(function (x) { return [x[0], x[1] / m]; });
+  }
+  function gen(sr, n) {
+    var s = new Float32Array(n), i, t;
+    if (cur === "tone") for (i = 0; i < n; i++) s[i] = Math.sin(2 * Math.PI * freq * i / sr);
+    else if (cur === "whistle") { var ph = 0; for (i = 0; i < n; i++) { t = i / sr; ph += 2 * Math.PI * (1500 + 25 * Math.sin(2 * Math.PI * 5 * t)) / sr; s[i] = Math.sin(ph); } }
+    else if (cur === "chord") for (i = 0; i < n; i++) { t = i / sr; s[i] = (Math.sin(2 * Math.PI * 261.6 * t) + Math.sin(2 * Math.PI * 329.6 * t) + Math.sin(2 * Math.PI * 392 * t)) / 3; }
+    else if (cur === "noise") { var seed = 7; for (i = 0; i < n; i++) { seed = (seed * 16807) % 2147483647; s[i] = (seed / 2147483647) * 2 - 1; } }
+    else { var H = vowelAmps(cur), sum = H.reduce(function (a, h) { return a + h[1]; }, 0); for (i = 0; i < n; i++) { t = i / sr; var v = 0; for (var k = 0; k < H.length; k++) v += H[k][1] * Math.sin(2 * Math.PI * H[k][0] * t + k * 0.7); s[i] = v / sum * 2.2; } }
+    var m = 0; for (i = 0; i < n; i++) m = Math.max(m, Math.abs(s[i]));
+    for (i = 0; i < n; i++) s[i] = s[i] / (m || 1) * amp;
+    return s;
+  }
+  // 频谱：对 16000 赫兹采样的 4096 个点加汉宁窗做离散傅里叶变换，只算 0～4000 赫兹
+  function spectrum(x, sr) {
+    var N = x.length, bins = Math.floor(4000 / (sr / N)), out = new Float32Array(bins), w = new Float32Array(N), i, k;
+    for (i = 0; i < N; i++) w[i] = x[i] * (0.5 - 0.5 * Math.cos(2 * Math.PI * i / (N - 1)));
+    var c = new Float32Array(N), s = new Float32Array(N);
+    for (i = 0; i < N; i++) { c[i] = Math.cos(2 * Math.PI * i / N); s[i] = Math.sin(2 * Math.PI * i / N); }
+    for (k = 1; k < bins; k++) { var re = 0, im = 0, idx = 0; for (i = 0; i < N; i++) { re += w[i] * c[idx]; im -= w[i] * s[idx]; idx += k; if (idx >= N) idx -= N; } out[k] = Math.sqrt(re * re + im * im) / N * 4; }
+    return out;
+  }
+
+  var cw = document.getElementById("wave"), cs = document.getElementById("spec"), xw = cw.getContext("2d"), xs = cs.getContext("2d");
+  function axes(ctx, W, H, labels) {
+    ctx.clearRect(0, 0, W, H); ctx.strokeStyle = "#eceff1"; ctx.fillStyle = "#90a4ae"; ctx.font = "11px sans-serif"; ctx.lineWidth = 1;
+    labels.forEach(function (l) { ctx.beginPath(); ctx.moveTo(l[0], 0); ctx.lineTo(l[0], H - 14); ctx.stroke(); ctx.fillText(l[1], Math.min(W - 40, l[0] + 2), H - 2); });
+  }
+  function drawWave(y) {
+    var W = cw.width, H = cw.height, mid = (H - 14) / 2;
+    axes(xw, W, H, [[0, "0"], [W / 4, "5 毫秒"], [W / 2, "10 毫秒"], [W * 3 / 4, "15 毫秒"]]);
+    xw.strokeStyle = "#cfd8dc"; xw.beginPath(); xw.moveTo(0, mid); xw.lineTo(W, mid); xw.stroke();
+    xw.strokeStyle = "#3f51b5"; xw.lineWidth = 1.6; xw.beginPath();
+    for (var i = 0; i < y.length; i++) { var px = i / (y.length - 1) * W, py = mid - y[i] * (mid - 6); i ? xw.lineTo(px, py) : xw.moveTo(px, py); }
+    xw.stroke();
+  }
+  function drawSpec(sp, db) {
+    var W = cs.width, H = cs.height - 14;
+    axes(xs, W, cs.height, [[0, "0"], [W / 4, "1000 赫兹"], [W / 2, "2000"], [W * 3 / 4, "3000"]]);
+    xs.fillStyle = "rgba(63,81,181,.15)"; xs.strokeStyle = "#3f51b5"; xs.lineWidth = 1.4; xs.beginPath(); xs.moveTo(0, H);
+    for (var k = 0; k < sp.length; k++) {
+      var v = db ? Math.max(0, (sp[k] + 100) / 70) : Math.max(0, (20 * Math.log10(sp[k] + 1e-6) + 60) / 60);
+      xs.lineTo(k / (sp.length - 1) * W, H - Math.min(1, v) * (H - 4));
+    }
+    xs.lineTo(W, H); xs.closePath(); xs.fill(); xs.stroke();
+  }
+  function peaks(sp, df) {
+    var p = [];
+    if (!sp) return p;
+    for (var k = 2; k < sp.length - 2; k++) if (sp[k] > sp[k - 1] && sp[k] >= sp[k + 1] && sp[k] > 0.08 * amp) p.push([k * df, sp[k]]);
+    p.sort(function (a, b) { return b[1] - a[1]; });
+    return p.slice(0, 4).map(function (x) { return Math.round(x[0]); }).sort(function (a, b) { return a - b; });
+  }
+  function update() {
+    document.getElementById("fv").textContent = freq + " 赫兹"; document.getElementById("av").textContent = amp.toFixed(2);
+    document.getElementById("frow").style.opacity = cur === "tone" ? 1 : 0.4; document.getElementById("freq").disabled = cur !== "tone";
+    if (micOn) return;
+    var sr = 48000; drawWave(gen(sr, sr / 50));
+    var x = gen(16000, 4096), sp = spectrum(x, 16000), df = 16000 / 4096; drawSpec(sp, false);
+    var S = SOUNDS.filter(function (s) { return s.id === cur; })[0], pk = cur === "tone" || cur === "whistle" ? peaks(sp, df).slice(0, 1) : cur === "chord" ? peaks(sp, df).slice(0, 3) : [];
+    if (FORM[cur]) pk = null;
+    var per = cur === "tone" ? "。一秒钟振动 " + freq + " 次，一个周期 = 1 ÷ " + freq + " ≈ " + (1000 / freq).toFixed(2) + " 毫秒，20 毫秒里有约 " + Math.round(freq / 50) + " 个波" : "";
+    document.getElementById("info").innerHTML = S.d + per + (pk === null ? "<br><span class='note'>梳齿之间的间隔都是 130 赫兹，就是声带振动的基频；把梳齿顶端连起来，看到的几个“山峰”就是共振峰。</span>" : pk.length ? "<br><span class='note'>频谱上最突出的峰：" + pk.map(function (f) { return f + " 赫兹"; }).join("、") + "（频谱的分辨率约 4 赫兹，读数有一点误差）</span>" : "");
+    document.querySelectorAll("#sounds button").forEach(function (b) { b.classList.toggle("on", b.dataset.s === cur); });
+  }
+  document.getElementById("sounds").innerHTML = SOUNDS.map(function (s) { return '<button data-s="' + s.id + '">' + s.n + "</button>"; }).join("");
+  document.querySelectorAll("#sounds button").forEach(function (b) { b.onclick = function () { stopMic(); cur = b.dataset.s; update(); }; });
+  document.getElementById("freq").oninput = function () { freq = +this.value; update(); };
+  document.getElementById("amp").oninput = function () { amp = +this.value; update(); };
+
+  var ac = null;
+  document.getElementById("play").onclick = function () {
+    try {
+      ac = ac || new (window.AudioContext || window.webkitAudioContext)(); if (ac.state === "suspended") ac.resume();
+      var sr = ac.sampleRate, n = Math.floor(sr * 1.5), y = gen(sr, n), buf = ac.createBuffer(1, n, sr), d = buf.getChannelData(0);
+      for (var i = 0; i < n; i++) { var e = Math.min(1, i / (sr * 0.02), (n - i) / (sr * 0.05)); d[i] = y[i] * 0.35 * e; }
+      var src = ac.createBufferSource(); src.buffer = buf; src.connect(ac.destination); src.start();
+    } catch (err) { document.getElementById("micnote").textContent = "这个浏览器不支持播放声音。"; }
+  };
+
+  // 麦克风：实时显示自己的声音
+  var micOn = false, stream = null, an = null, raf = 0;
+  function stopMic() { if (!micOn) return; micOn = false; cancelAnimationFrame(raf); if (stream) stream.getTracks().forEach(function (t) { t.stop(); }); document.getElementById("mic").textContent = "🎤 用麦克风"; document.getElementById("micnote").textContent = ""; }
+  document.getElementById("mic").onclick = function () {
+    if (micOn) { stopMic(); update(); return; }
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { document.getElementById("micnote").textContent = "这个浏览器不支持麦克风。"; return; }
+    navigator.mediaDevices.getUserMedia({ audio:true }).then(function (st) {
+      stream = st; ac = ac || new (window.AudioContext || window.webkitAudioContext)(); if (ac.state === "suspended") ac.resume();
+      an = ac.createAnalyser(); an.fftSize = 2048; an.smoothingTimeConstant = 0.6; ac.createMediaStreamSource(st).connect(an);
+      micOn = true; document.getElementById("mic").textContent = "■ 停止麦克风"; document.getElementById("micnote").textContent = "正在显示麦克风的声音，声音不会被录下或上传。试试说“啊”“衣”，吹口哨。";
+      document.querySelectorAll("#sounds button").forEach(function (b) { b.classList.remove("on"); });
+      document.getElementById("info").textContent = "麦克风模式：对着麦克风发出不同的声音，观察波形和频谱的变化。";
+      var td = new Float32Array(an.fftSize), fd = new Float32Array(an.frequencyBinCount), need = Math.floor(ac.sampleRate / 50), bins = Math.floor(4000 / (ac.sampleRate / an.fftSize));
+      (function loop() {
+        if (!micOn) return; an.getFloatTimeDomainData(td); an.getFloatFrequencyData(fd);
+        var y = td.slice(0, Math.min(need, td.length)), m = 0.05; for (var i = 0; i < y.length; i++) m = Math.max(m, Math.abs(y[i]));
+        drawWave(y.map(function (v) { return v / m * 0.9; })); drawSpec(fd.slice(0, bins), true); raf = requestAnimationFrame(loop);
+      })();
+    }).catch(function () { document.getElementById("micnote").textContent = "没有拿到麦克风权限。嵌在教材页面里时可能被浏览器禁止，请点“全屏打开”后再试。"; });
+  };
+
+  // 采样与量化
+  var RATES = [2000, 4000, 8000, 16000, 48000], BITS = [2, 3, 4, 8], rate = 8000, bits = 3;
+  var csm = document.getElementById("samp"), xm = csm.getContext("2d");
+  function drawSamp() {
+    var W = csm.width, H = csm.height - 16, mid = H / 2, T = 0.003, f = 1000, L = Math.pow(2, bits);
+    xm.clearRect(0, 0, W, csm.height); xm.font = "11px sans-serif"; xm.fillStyle = "#90a4ae";
+    for (var q = 0; q < L && L <= 16; q++) { var yy = mid - (-1 + 2 * q / (L - 1)) * (mid - 8); xm.strokeStyle = "#f1f3f5"; xm.beginPath(); xm.moveTo(0, yy); xm.lineTo(W, yy); xm.stroke(); }
+    ["0", "1 毫秒", "2 毫秒"].forEach(function (s, i) { xm.fillText(s, i * W / 3 + 2, csm.height - 3); });
+    xm.strokeStyle = "#b0bec5"; xm.lineWidth = 1.5; xm.beginPath();
+    for (var i = 0; i <= 600; i++) { var t = i / 600 * T, y = Math.sin(2 * Math.PI * f * t + 0.3); i ? xm.lineTo(i / 600 * W, mid - y * (mid - 8)) : xm.moveTo(0, mid - y * (mid - 8)); } xm.stroke();
+    var n = Math.floor(T * rate) + 1, pts = [];
+    for (var j = 0; j < n; j++) { var tj = j / rate, v = Math.sin(2 * Math.PI * f * tj + 0.3), qv = -1 + 2 * Math.round((v + 1) / 2 * (L - 1)) / (L - 1); pts.push([tj / T * W, mid - qv * (mid - 8)]); }
+    xm.strokeStyle = "#ef6c00"; xm.lineWidth = 2; xm.beginPath(); pts.forEach(function (p, k) { k ? xm.lineTo(p[0], p[1]) : xm.moveTo(p[0], p[1]); }); xm.stroke();
+    if (n <= 160) { xm.fillStyle = "#3f51b5"; pts.forEach(function (p) { xm.beginPath(); xm.arc(p[0], p[1], n > 60 ? 2 : 3.5, 0, 7); xm.fill(); }); }
+    var bytes = rate * bits / 8;
+    document.getElementById("sinfo").innerHTML = "采样率 " + rate + " 赫兹：每秒记录 " + rate + " 个数，1000 赫兹的声音每个周期只采到 " + (rate / f) + " 个点。" +
+      (rate <= 2000 ? "<b class='bad'>采得太稀，还原出的已经不像原来的波了。</b>" : rate <= 4000 ? "勉强能看出波形，但很粗糙。" : "") +
+      "<br>量化 " + bits + " 位：每个数只能取 2<sup>" + bits + "</sup> = " + L + " 个等级中的一个" + (bits <= 3 ? "，台阶很明显，声音会有杂音" : bits >= 8 ? "，已经比较精细（CD 用 16 位，即 65536 个等级）" : "") +
+      "。<br>单声道每秒的数据量 = " + rate + " × " + bits + " ÷ 8 = " + bytes.toLocaleString() + " 字节。";
+    document.querySelectorAll("#rates button").forEach(function (b) { b.classList.toggle("on", +b.dataset.r === rate); });
+    document.querySelectorAll("#bits button").forEach(function (b) { b.classList.toggle("on", +b.dataset.b === bits); });
+  }
+  document.getElementById("rates").innerHTML = RATES.map(function (r) { return '<button data-r="' + r + '">' + (r >= 1000 ? r / 1000 + " 千赫兹" : r) + "</button>"; }).join("");
+  document.getElementById("bits").innerHTML = BITS.map(function (b) { return '<button data-b="' + b + '">' + b + " 位</button>"; }).join("");
+  document.querySelectorAll("#rates button").forEach(function (b) { b.onclick = function () { rate = +b.dataset.r; drawSamp(); }; });
+  document.querySelectorAll("#bits button").forEach(function (b) { b.onclick = function () { bits = +b.dataset.b; drawSamp(); }; });
+
+  update(); drawSamp();
+})();
+</script>
+</body>
+</html>

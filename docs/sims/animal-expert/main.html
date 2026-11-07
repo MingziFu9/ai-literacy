@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>动物识别专家系统</title>
+<link rel="stylesheet" href="../common/sim.css">
+<style>
+  .wrap { display:grid; grid-template-columns:1fr 1.25fr; gap:12px; align-items:start; }
+  @media (max-width:640px) { .wrap { grid-template-columns:1fr; } }
+  .feats { display:flex; flex-wrap:wrap; gap:4px; }
+  .feats label { border:1px solid var(--line); border-radius:12px; padding:1px 8px; font-size:12.5px; cursor:pointer; }
+  .feats label.on { background:var(--soft); border-color:var(--accent); }
+  .feats input { display:none; }
+  .fact { display:inline-block; padding:1px 8px; margin:2px; border-radius:10px; background:#f5f5f5; font-size:12.5px; }
+  .fact.new { background:#c8e6c9; } .fact.final { background:#ffe0b2; font-weight:bold; }
+  .rule { font-size:12.5px; padding:3px 6px; border-radius:4px; border:1px solid transparent; }
+  .rule.fired { background:#e8f5e9; } .rule.cur { border-color:var(--pos); background:#c8e6c9; }
+  .rule.user { color:#6a1b9a; }
+  .rule b { color:var(--accent); }
+  #rules { max-height:360px; overflow:auto; }
+  .add input[type=text] { flex:1; min-width:120px; }
+</style>
+</head>
+<body>
+<h1>动物识别专家系统：一步步正向推理</h1>
+<div class="sub">左边勾选你观察到的特征（已知事实），点“推理一步”：推理机从上到下检查知识库里的规则，找到第一条条件全部满足、结论还不知道的规则，把结论加入已知事实。</div>
+
+<div class="wrap">
+  <div>
+    <div class="box"><h2>① 观察到的特征（点击勾选）</h2><div class="feats" id="feats"></div></div>
+    <div class="row"><button class="main" id="step">推理一步</button><button id="all">推理到底</button><button id="why">为什么？</button><button id="clear">清空</button></div>
+    <div class="box"><h2>② 综合数据库（已知事实和中间结论）</h2><div id="facts"></div></div>
+    <div class="box"><div class="msg" id="msg"></div></div>
+  </div>
+  <div>
+    <div class="box"><h2>③ 知识库（共 <span id="nrule">15</span> 条规则）</h2><div id="rules"></div></div>
+    <div class="box"><h2>④ 添加规则（知识获取）</h2>
+      <div class="row add"><span class="lbl">如果</span><input type="text" id="cond" placeholder="条件，用“、”分隔，如：哺乳动物、有长鼻子" list="known"></div>
+      <div class="row add"><span class="lbl">那么</span><input type="text" id="conc" placeholder="结论，如：大象"><label class="lbl"><input type="checkbox" id="isfinal" checked> 是最终结论（动物名）</label><button id="add">添加</button></div>
+      <datalist id="known"></datalist>
+      <div class="note">新规则加在知识库末尾；条件中写的特征如果左边没有，会自动加进特征列表。</div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var FEATS = ["有毛发","有奶","有羽毛","会飞","会下蛋","吃肉","有犬齿","有爪","眼盯前方","有蹄","反刍","黄褐色","有暗斑点","有黑色条纹","长脖子","长腿","不会飞","会游泳","有黑白二色","善飞"];
+  var RULES = [
+    { c:["有毛发"], r:"哺乳动物" }, { c:["有奶"], r:"哺乳动物" }, { c:["有羽毛"], r:"鸟" }, { c:["会飞","会下蛋"], r:"鸟" },
+    { c:["吃肉"], r:"食肉动物" }, { c:["有犬齿","有爪","眼盯前方"], r:"食肉动物" },
+    { c:["哺乳动物","有蹄"], r:"有蹄类动物" }, { c:["哺乳动物","反刍"], r:"有蹄类动物" },
+    { c:["哺乳动物","食肉动物","黄褐色","有暗斑点"], r:"金钱豹", f:1 }, { c:["哺乳动物","食肉动物","黄褐色","有黑色条纹"], r:"虎", f:1 },
+    { c:["有蹄类动物","长脖子","长腿","有暗斑点"], r:"长颈鹿", f:1 }, { c:["有蹄类动物","有黑色条纹"], r:"斑马", f:1 },
+    { c:["鸟","长脖子","长腿","不会飞","有黑白二色"], r:"鸵鸟", f:1 }, { c:["鸟","会游泳","不会飞","有黑白二色"], r:"企鹅", f:1 },
+    { c:["鸟","善飞"], r:"信天翁", f:1 }
+  ];
+  var facts, fired, derivedBy, cur;
+  function el(id) { return document.getElementById(id); }
+  function renderFeats() {
+    var box = el("feats"); box.innerHTML = "";
+    FEATS.forEach(function (f) {
+      var l = document.createElement("label"), i = document.createElement("input"); i.type = "checkbox"; i.value = f;
+      i.checked = facts.indexOf(f) >= 0 && !derivedBy[f]; l.className = i.checked ? "on" : "";
+      i.onchange = function () { if (i.checked) { if (facts.indexOf(f) < 0) facts.push(f); } else { reset(true); return; } l.className = i.checked ? "on" : ""; renderFacts(); };
+      l.appendChild(i); l.appendChild(document.createTextNode(f)); box.appendChild(l);
+    });
+    var dl = el("known"); dl.innerHTML = "";
+    FEATS.concat(["哺乳动物","鸟","食肉动物","有蹄类动物"]).forEach(function (f) { var o = document.createElement("option"); o.value = f; dl.appendChild(o); });
+  }
+  function ruleText(r, i) { return "<b>R" + (i + 1) + "</b> 如果 " + r.c.join(" 并且 ") + "，那么 是" + r.r; }
+  function renderRules() {
+    el("nrule").textContent = RULES.length;
+    el("rules").innerHTML = RULES.map(function (r, i) {
+      return "<div class='rule" + (fired.indexOf(i) >= 0 ? " fired" : "") + (i === cur ? " cur" : "") + (r.u ? " user" : "") + "'>" + ruleText(r, i) + (fired.indexOf(i) >= 0 ? " ✓" : "") + "</div>";
+    }).join("");
+  }
+  function isFinal(x) { return RULES.some(function (r) { return r.f && r.r === x; }); }
+  function renderFacts() {
+    el("facts").innerHTML = facts.length ? facts.map(function (f) { return "<span class='fact" + (isFinal(f) ? " final" : derivedBy[f] !== undefined ? " new" : "") + "'>" + f + "</span>"; }).join("") : "<span class='lbl'>（还没有事实，请先在 ① 里勾选）</span>";
+    renderRules();
+  }
+  function reset(keepChecks) {
+    var checked = keepChecks ? Array.prototype.filter.call(document.querySelectorAll("#feats input"), function (i) { return i.checked; }).map(function (i) { return i.value; }) : [];
+    facts = checked; fired = []; derivedBy = {}; cur = -1;
+    renderFeats(); renderFacts(); msg(keepChecks ? "特征改了，推理从头开始。" : "勾选特征后点“推理一步”。");
+  }
+  function finals() { return facts.filter(isFinal); }
+  function step() {
+    for (var i = 0; i < RULES.length; i++) {
+      var r = RULES[i];
+      if (facts.indexOf(r.r) >= 0) continue;
+      if (r.c.every(function (c) { return facts.indexOf(c) >= 0; })) {
+        facts.push(r.r); fired.push(i); derivedBy[r.r] = i; cur = i; renderFacts();
+        var fs = finals();
+        if (fs.length > 1) { msg("R" + (i + 1) + " 被触发，得出“" + r.r + "”。注意：现在同时推出了 " + fs.join("、") + "，规则之间出现了矛盾！真正的专家系统需要检查知识库的一致性。"); return false; }
+        if (r.f) { msg("R" + (i + 1) + " 被触发，得出最终结论：这是" + r.r + "。点“为什么？”查看推理过程。"); return false; }
+        msg("R" + (i + 1) + " 被触发：" + r.c.join("、") + " 都已知，得出新结论“" + r.r + "”，加入综合数据库。");
+        return true;
+      }
+    }
+    cur = -1; renderRules();
+    msg(finals().length ? "推理已完成。" : facts.length ? "没有规则可以用了，但还没有推出是什么动物。已知的事实不够，真正的专家系统这时会转入反向推理，向用户提问（比如“它有没有黑色条纹？”）。" : "请先勾选观察到的特征。");
+    return false;
+  }
+  function why() {
+    if (!fired.length) { msg("还没有用过任何规则。"); return; }
+    var target = finals()[0] || facts[facts.length - 1], lines = [];
+    (function explain(x, depth) {
+      var i = derivedBy[x]; if (i === undefined) return;
+      var r = RULES[i];
+      lines.push("　".repeat(depth) + "“" + x + "”是因为 R" + (i + 1) + "：" + r.c.map(function (c) { return derivedBy[c] !== undefined ? c + "（推出的）" : c + "（你观察到的）"; }).join("、"));
+      r.c.forEach(function (c) { explain(c, depth + 1); });
+    })(target, 0);
+    el("msg").innerHTML = "<b>解释器：</b><br>" + lines.join("<br>");
+  }
+  function msg(t) { el("msg").textContent = t; }
+  el("step").onclick = step;
+  el("all").onclick = function () { var n = 0; while (step() && n++ < 50); };
+  el("why").onclick = why;
+  el("clear").onclick = function () { reset(false); };
+  el("add").onclick = function () {
+    var c = el("cond").value.split(/[、，,\s]+/).map(function (s) { return s.replace(/^是/, "").trim(); }).filter(Boolean), r = el("conc").value.replace(/^是/, "").trim();
+    if (!c.length || !r) { msg("请把条件和结论都填上。"); return; }
+    c.forEach(function (x) { if (FEATS.indexOf(x) < 0 && ["哺乳动物","鸟","食肉动物","有蹄类动物"].indexOf(x) < 0 && !RULES.some(function (q) { return q.r === x; })) FEATS.push(x); });
+    RULES.push({ c:c, r:r, f:el("isfinal").checked ? 1 : 0, u:1 });
+    el("cond").value = el("conc").value = "";
+    reset(true); msg("已添加 R" + RULES.length + "：" + "如果 " + c.join(" 并且 ") + "，那么 是" + r + "。勾选相应特征试一试。");
+  };
+  reset(false);
+})();
+</script>
+<script src="../common/sim.js"></script>
+</body>
+</html>

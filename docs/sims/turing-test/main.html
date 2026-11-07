@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>图灵测试小游戏</title>
+<link rel="stylesheet" href="../common/sim.css">
+<style>
+  .q { background:var(--soft); border-radius:8px; padding:8px 10px; font-size:14px; }
+  .q b { color:var(--accent); }
+  .ans { border:2px solid var(--line); border-radius:8px; padding:8px 10px; font-size:14px; min-height:6em; background:#fff; }
+  .ans h2 { font-size:13px; margin:0 0 4px; color:var(--muted); }
+  .ans.human { border-color:var(--pos); } .ans.ai { border-color:var(--warn); }
+  .tag { display:inline-block; font-size:12px; padding:0 6px; border-radius:8px; color:#fff; margin-left:4px; }
+  .tag.h { background:var(--pos); } .tag.a { background:var(--warn); }
+  .dots { display:flex; gap:4px; flex-wrap:wrap; }
+  .dot { width:18px; height:18px; border-radius:50%; background:#eceff1; font-size:10px; text-align:center; line-height:18px; color:var(--muted); }
+  .dot.ok { background:var(--pos); color:#fff; } .dot.no { background:var(--neg); color:#fff; } .dot.cur { box-shadow:0 0 0 2px var(--accent); }
+  .hint { background:#fffde7; border-left:4px solid #fbc02d; padding:6px 10px; border-radius:4px; font-size:13.5px; margin-top:8px; }
+</style>
+</head>
+<body>
+<h1>图灵测试小游戏：哪一边是人？</h1>
+<div class="sub">每一轮，同一个问题分别问了 A、B 两位对象，一位是人，一位是 AI。读完回答，选出你认为是人的那一位。（对话为编者根据真人与大模型的典型回答编写。）</div>
+
+<div class="row"><div class="dots" id="dots"></div><span class="lbl" id="score"></span></div>
+<div class="q" id="q"></div>
+<div class="grid2" style="margin-top:8px">
+  <div class="ans" id="A"></div>
+  <div class="ans" id="B"></div>
+</div>
+<div class="row" id="pick">
+  <button class="main" id="pa">A 是人</button><button class="main" id="pb">B 是人</button>
+</div>
+<div id="fb"></div>
+<div class="row"><button id="next" hidden>下一轮 →</button><button id="again" hidden>再玩一次（打乱顺序）</button></div>
+<div class="note">提示：先在记录表里写下判断依据，再点按钮。今天的大模型可以被要求“扮演一个普通人”，故意写得口语化、甚至带错别字，所以有些轮次很难分辨，这正是图灵测试越来越难当作“智能标准”的原因。</div>
+
+<script>
+(function () {
+  // h = 人的回答，a = AI 的回答，tip = 判断提示
+  var R = [
+    { q:"你今天早饭吃的什么？", h:"楼下买了俩包子 一个韭菜鸡蛋的 有点咸", a:"作为一个 AI，我不需要吃早饭哦！不过我很乐意为你推荐几种营养均衡的早餐搭配：1. 全麦面包 + 鸡蛋 + 牛奶……",
+      tip:"最容易的一轮：没有被要求“扮演人”的 AI 往往会主动说明自己是 AI，回答也特别“有条理”。" },
+    { q:"37 × 48 等于多少？", h:"等下我拿计算器……1776", a:"37 × 48 = 1776。可以这样算：37 × 50 = 1850，再减去 37 × 2 = 74，得到 1776。",
+      tip:"两边都算对了。人往往会借助工具、回答简短；AI 喜欢顺带给出完整步骤，像在讲题。" },
+    { q:"用一句话形容一下你们那儿今天的天气。", h:"闷得要死，衣服晾了两天还是潮的", a:"今天天气晴朗，阳光明媚，微风拂面，非常适合外出散步。",
+      tip:"AI 不知道“你们那儿”是哪儿，常给出一个泛泛的、像作文一样的描述；人会说出具体的、带情绪的感受。" },
+    { q:"你最近一次生气是因为什么？", h:"快递又被放到驿站了，明明写了送货上门，打电话过去还说我没在家", a:"最近一次生气是因为在地铁上有人一直大声外放视频，我提醒了一下，对方还不太高兴。后来想想也没必要，就戴上耳机了。",
+      tip:"这一轮比较难：被要求扮演人的 AI 也能编出合情合理的“个人经历”。可以留意细节是否“太圆满”，比如故事里自带了反思和收尾。" },
+    { q:"“我想静静”，静静是谁？", h:"哈哈哈 老梗了 就是想一个人待着别烦我的意思", a:"“我想静静”是网络流行语，字面上是“我想安静一下”，因为“静静”听起来像一个人名，所以常被调侃为“静静是谁”。",
+      tip:"两边都懂这个梗。人往往直接用梗来回应，AI 更像在“解释”这个梗。" },
+    { q:"请你随便写一个错别字。", h:"再接再励（应该是“厉”对吧哈哈）", a:"好的：“迫不急待”（正确写法是“迫不及待”）。",
+      tip:"这种“奇怪的要求”人和 AI 都能完成。仅凭一轮回答很难判断，图灵测试通常要聊上好几分钟。" },
+    { q:"你周末一般干嘛？", h:"补觉 然后带娃去公园 有时候加班", a:"周末的话一般就宅着，刷刷剧，偶尔约朋友吃个火锅，懒得出门的时候点外卖哈哈。",
+      tip:"很难的一轮：AI 被设定成“年轻人”后，会故意用口语和“哈哈”。人的回答里有“带娃”“加班”这种和自己处境绑定的细节。" },
+    { q:"明天几号？星期几？", h:"你手机上不就有吗……", a:"抱歉，我无法获取实时日期信息。你可以查看手机或电脑上的日历来确认明天的日期。",
+      tip:"AI 往往不知道“现在”是什么时候（它的知识有截止日期，也不一定能联网），会礼貌地说明自己做不到；人会觉得这问题莫名其妙。" },
+    { q:"讲一个你小时候的糗事。", h:"小学升旗仪式当旗手 旗子挂反了 全校都在笑 我到现在都记得", a:"小时候有一次去亲戚家，把一盘蜡做的假水果当成真的，咬了一大口，满嘴蜡味，全家人笑了好几年。",
+      tip:"AI 编的糗事常常是网上流传很广的“经典桥段”（咬蜡果），人的经历更具体、更不“标准”。" },
+    { q:"如果给你 100 万，你第一件事做什么？", h:"先把房贷还一部分吧 现实", a:"如果有 100 万，我会先拿一部分存起来做应急资金，再拿一部分学习新技能，剩下的可以考虑稳健的理财，同时也会留一点钱犒劳一下自己和家人。",
+      tip:"AI 的回答常常“面面俱到”，像在写理财建议；人的回答更短、更偏向自己眼下最在意的事。" }
+  ];
+  var order, sides, i, results;
+  function shuffle(a, rnd) { for (var k = a.length - 1; k > 0; k--) { var j = Math.floor(rnd() * (k + 1)), t = a[k]; a[k] = a[j]; a[j] = t; } return a; }
+  var seed = 7; function rnd() { seed = (seed * 9301 + 49297) % 233280; return seed / 233280; }
+  function start(shuf) {
+    order = R.map(function (_, k) { return k; });
+    sides = R.map(function (_, k) { return [0, 1, 1, 0, 1, 0, 0, 1, 0, 1][k]; }); // 1 = 人在 A
+    if (shuf) { shuffle(order, rnd); sides = sides.map(function () { return rnd() < 0.5 ? 1 : 0; }); }
+    i = 0; results = []; show();
+  }
+  function dots() {
+    var d = document.getElementById("dots"); d.innerHTML = "";
+    R.forEach(function (_, k) {
+      var s = document.createElement("span"); s.className = "dot" + (k < results.length ? (results[k] ? " ok" : " no") : "") + (k === i ? " cur" : "");
+      s.textContent = k + 1; d.appendChild(s);
+    });
+    var ok = results.filter(Boolean).length;
+    document.getElementById("score").textContent = results.length ? "已答 " + results.length + " 轮，答对 " + ok + " 轮" : "";
+  }
+  function show() {
+    var r = R[order[i]], humanA = sides[i] === 1;
+    document.getElementById("q").innerHTML = "<b>第 " + (i + 1) + " 轮　提问：</b>" + r.q;
+    var A = document.getElementById("A"), B = document.getElementById("B");
+    A.className = B.className = "ans";
+    A.innerHTML = "<h2>A 的回答</h2>" + (humanA ? r.h : r.a);
+    B.innerHTML = "<h2>B 的回答</h2>" + (humanA ? r.a : r.h);
+    document.getElementById("pick").hidden = false;
+    document.getElementById("fb").innerHTML = "";
+    document.getElementById("next").hidden = document.getElementById("again").hidden = true;
+    dots();
+  }
+  function pick(isA) {
+    var r = R[order[i]], humanA = sides[i] === 1, ok = isA === humanA;
+    results.push(ok);
+    var A = document.getElementById("A"), B = document.getElementById("B");
+    A.className = "ans " + (humanA ? "human" : "ai"); B.className = "ans " + (humanA ? "ai" : "human");
+    A.querySelector("h2").innerHTML += humanA ? "<span class='tag h'>人</span>" : "<span class='tag a'>AI</span>";
+    B.querySelector("h2").innerHTML += humanA ? "<span class='tag a'>AI</span>" : "<span class='tag h'>人</span>";
+    document.getElementById("pick").hidden = true;
+    var fb = "<div class='msg " + (ok ? "ok'>判断正确！" : "bad'>判断错了，这一轮被 AI 骗过去了。") + "</div><div class='hint'>提示：" + r.tip + "</div>";
+    if (i === R.length - 1) {
+      var n = results.filter(Boolean).length;
+      fb += "<div class='box'><h2>10 轮结束：你答对了 " + n + " 轮（" + n * 10 + "%）</h2>" +
+        (n >= 8 ? "你是一位敏锐的提问者。不过这里大多数 AI 回答没有刻意伪装，真实测试中 AI 会更难认。" :
+         n >= 5 ? "比瞎猜（约 50%）好一些。想一想哪几轮最难，你是靠什么线索判断的。" :
+         "接近或低于瞎猜的水平，说明今天的 AI 已经很会“装人”。2025 年的研究中，GPT-4.5 有 73% 的时候被判为人。") + "</div>";
+      document.getElementById("again").hidden = false;
+    } else document.getElementById("next").hidden = false;
+    document.getElementById("fb").innerHTML = fb; dots();
+  }
+  document.getElementById("pa").onclick = function () { pick(true); };
+  document.getElementById("pb").onclick = function () { pick(false); };
+  document.getElementById("next").onclick = function () { i++; show(); };
+  document.getElementById("again").onclick = function () { start(true); };
+  start(false);
+})();
+</script>
+<script src="../common/sim.js"></script>
+</body>
+</html>

@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>人工智能发展时间线</title>
+<link rel="stylesheet" href="../common/sim.css">
+<style>
+  .eras { display:grid; grid-template-columns:repeat(4,1fr); gap:6px; margin-top:6px; }
+  @media (max-width:620px) { .eras { grid-template-columns:1fr 1fr; } }
+  .era { border:2px solid var(--line); border-radius:8px; padding:6px 8px; cursor:pointer; background:#fff; text-align:left; color:var(--ink); }
+  .era b { display:block; font-size:14px; } .era span { font-size:12px; color:var(--muted); }
+  .era.on { border-color:var(--c); background:var(--cbg); color:var(--ink); }
+  .axis { position:relative; height:58px; margin:14px 4px 4px; }
+  .axis .line { position:absolute; left:0; right:0; top:22px; height:4px; background:var(--line); border-radius:2px; }
+  .winter { position:absolute; top:16px; height:16px; background:repeating-linear-gradient(45deg,#cfd8dc,#cfd8dc 4px,#eceff1 4px,#eceff1 8px); border-radius:3px; }
+  .wl { position:absolute; top:0; font-size:10.5px; color:var(--muted); white-space:nowrap; }
+  .ev { position:absolute; top:14px; width:20px; height:20px; margin-left:-10px; border-radius:50%; border:3px solid #fff; cursor:pointer; box-shadow:0 0 0 1px var(--line); padding:0; }
+  .ev.on { transform:scale(1.35); box-shadow:0 0 0 2px var(--ink); }
+  .yr { position:absolute; top:40px; font-size:11px; color:var(--muted); margin-left:-14px; }
+  .card { border-left:4px solid var(--c); background:var(--cbg); padding:8px 10px; border-radius:4px; margin-top:8px; }
+  .card h2 { font-size:15px; margin:0 0 4px; }
+  .who { display:grid; grid-template-columns:5.5em 1fr; gap:2px 8px; font-size:13px; margin-top:6px; }
+  .who dt { color:var(--muted); } .who dd { margin:0; }
+  .cat { margin-top:8px; padding:8px; background:#fafafa; border:1px dashed var(--line); border-radius:6px; font-size:13.5px; }
+  .nav { justify-content:space-between; }
+</style>
+</head>
+<body>
+<h1>人工智能发展时间线：三次浪潮，两次低谷</h1>
+<div class="sub">点上面的阶段卡片，或者点时间轴上的圆点查看大事件；灰色斜纹是两次低谷。每个阶段下方都有一个“小问题”：这个年代的 AI 会怎样去认一只猫？</div>
+
+<div class="eras" id="eras"></div>
+<div class="axis" id="axis"><div class="line"></div></div>
+<div class="row nav"><button id="prev">← 上一个事件</button><span class="lbl" id="pos"></span><button id="next">下一个事件 →</button></div>
+<div class="card" id="evcard"></div>
+<div class="card" id="eracard"></div>
+
+<script>
+(function () {
+  var ERAS = [
+    { name:"第一次浪潮", years:"1956–1974", c:"#8e24aa", bg:"#f3e5f5", idea:"把问题表示成符号，让计算机按规则推理，或者在所有可能中搜索答案。",
+      human:"把问题写成符号和规则", machine:"推理、搜索", good:"能证明定理、下跳棋，过程清清楚楚", bad:"只能解决“玩具问题”，真实世界的情况多到算不过来，缺少常识",
+      cat:"程序员写规则：“有胡须、有尖耳朵、会喵喵叫 → 是猫。”可是照片里没有“胡须”这个符号，只有一堆像素，程序根本不知道从哪里找胡须。" },
+    { name:"第二次浪潮", years:"1980–1987", c:"#1e88e5", bg:"#e3f2fd", idea:"让机器在一个窄领域里当专家：把专家的经验写成成百上千条“如果……那么……”。",
+      human:"请专家口述经验，整理成规则库", machine:"按规则推理，给出结论和理由", good:"在医疗、地质、订单配置等窄领域取得商业成功", bad:"规则写不全、改不动、维护贵，遇到规则外的情况就束手无策",
+      cat:"请动物学家写了 300 条规则：“如果毛色是橘色且尾巴有环纹……”。可是遇到一只没见过的品种、或者一张只拍到半个猫头的照片，规则就失灵了。" },
+    { name:"第三次浪潮", years:"2006–2021", c:"#43a047", bg:"#e8f5e9", idea:"不写规则，让计算机从大量数据中自己学习；深度学习让神经网络自己从像素中提取特征。",
+      human:"准备大量标注好的数据", machine:"从数据中学出规律和特征", good:"图像、语音、翻译等任务接连突破，很多任务超过人类", bad:"需要大量标注数据和算力，像“黑箱”难以解释，一个模型只会一件事",
+      cat:"给神经网络看几百万张标好“猫 / 不是猫”的照片，它自己学会了先找边缘、再找耳朵和眼睛、最后认出整只猫，准确率超过了人。" },
+    { name:"大模型时代", years:"2022 至今", c:"#ef6c00", bg:"#fff3e0", idea:"一个在海量数据上训练的通用大模型，用自然语言下指令就能完成各种任务。",
+      human:"写清楚需求（提示词），检查结果", machine:"理解指令，直接完成多种任务", good:"通用、会听指令、能看图、能写能画", bad:"训练成本高，可能一本正经地胡说（幻觉），还有隐私、版权等新问题",
+      cat:"把照片发给多模态大模型，问“这是什么动物？它看起来心情怎么样？”它回答“一只橘猫，眯着眼睛，看起来很放松”，还能接着帮你写一段朋友圈文案。" }
+  ];
+  var EVENTS = [
+    { y:1950, era:0, t:"图灵测试", d:"图灵发表《计算机器与智能》，提出用“对话中分不出是人还是机器”来判断机器有没有智能（1.1.2 节）。" },
+    { y:1956, era:0, t:"达特茅斯会议", d:"麦卡锡、明斯基、香农等人召开研讨会，“人工智能”一词正式登场，这一年被称为人工智能元年（1.2.1 节）。" },
+    { y:1958, era:0, t:"感知机", d:"罗森布拉特提出感知机，最早的人工神经网络之一，连接主义的起点（第 4 章）。" },
+    { y:1966, era:0, t:"ELIZA 聊天程序", d:"魏森鲍姆写出 ELIZA，靠“关键词 + 模板”扮演心理咨询师，不少人以为屏幕后面真的有人。" },
+    { y:1973, era:0, t:"英国评估报告", d:"英国政府的一份评估报告认为人工智能没有实现承诺，英美大幅削减经费，第一次低谷开始。" },
+    { y:1980, era:1, t:"专家系统走向商业", d:"美国一家计算机公司用专家系统配置订单，据报道每年节省数千万美元，专家系统热潮兴起（第 2 章）。" },
+    { y:1982, era:1, t:"日本第五代计算机计划", d:"日本启动雄心勃勃的国家计划，想造出能推理、能对话的智能计算机，最终没有达到目标。" },
+    { y:1987, era:1, t:"专用 AI 计算机市场崩溃", d:"专家系统维护成本高、难以扩展，专用的人工智能计算机卖不动了，第二次低谷开始。" },
+    { y:1997, era:2, t:"“深蓝”战胜卡斯帕罗夫", d:"IBM 的“深蓝”计算机击败国际象棋世界冠军，靠的是强大的搜索和专用硬件。" },
+    { y:2006, era:2, t:"深度学习方法提出", d:"辛顿等人提出训练多层神经网络的新方法，“深度学习”一词开始流行。" },
+    { y:2012, era:2, t:"AlexNet", d:"深度神经网络 AlexNet 在 ImageNet 比赛中把错误率从约 26% 降到约 15%，深度学习时代到来（1.2.4 节）。" },
+    { y:2016, era:2, t:"AlphaGo 战胜李世石", d:"AlphaGo 以 4∶1 击败围棋世界冠军李世石，结合了深度学习、强化学习和搜索（第 8 章）。" },
+    { y:2017, era:2, t:"Transformer；《新一代人工智能发展规划》", d:"谷歌提出 Transformer 结构，成为后来几乎所有大模型的基础（第 5 章）；同年我国发布《新一代人工智能发展规划》。" },
+    { y:2022, era:3, t:"ChatGPT", d:"2022 年 11 月 30 日发布，两个月用户超过 1 亿，人工智能进入大模型时代（1.2.5 节）。" },
+    { y:2023, era:3, t:"国产大模型百花齐放", d:"文心一言、通义千问、豆包、Kimi、智谱 GLM 等陆续发布；《生成式人工智能服务管理暂行办法》施行（第 9 章）。" },
+    { y:2024, era:3, t:"诺贝尔奖与 AI", d:"诺贝尔物理学奖授予霍普菲尔德和辛顿，表彰他们为神经网络机器学习奠定基础；化学奖也颁给了用 AI 预测蛋白质结构的研究者。" },
+    { y:2025, era:3, t:"DeepSeek-R1", d:"深度求索发布开源推理模型 DeepSeek-R1，以较低的训练成本达到国际一流水平，在全球引起轰动。" }
+  ];
+  var WINTERS = [[1974, 1980, "第一次低谷"], [1987, 1993, "第二次低谷"]];
+  var Y0 = 1945, Y1 = 2030, curEra = 0, curEv = 1;
+  var erasEl = document.getElementById("eras"), axis = document.getElementById("axis");
+  function X(y) { return (y - Y0) / (Y1 - Y0) * 100; }
+
+  WINTERS.forEach(function (w) {
+    var d = document.createElement("div"); d.className = "winter"; d.style.left = X(w[0]) + "%"; d.style.width = (X(w[1]) - X(w[0])) + "%"; d.title = w[2] + " " + w[0] + "–" + w[1]; axis.appendChild(d);
+    var l = document.createElement("span"); l.className = "wl"; l.textContent = w[2]; l.style.left = X(w[0]) + "%"; axis.appendChild(l);
+  });
+  ERAS.forEach(function (e, i) {
+    var b = document.createElement("button"); b.className = "era";
+    b.style.setProperty("--c", e.c); b.style.setProperty("--cbg", e.bg);
+    b.innerHTML = "<b>" + e.name + "</b><span>" + e.years + "</span>";
+    b.onclick = function () { curEra = i; curEv = EVENTS.findIndex(function (v) { return v.era === i; }); draw(); };
+    erasEl.appendChild(b);
+  });
+  EVENTS.forEach(function (v, i) {
+    var b = document.createElement("button");
+    b.className = "ev"; b.style.left = X(v.y) + "%"; b.style.background = ERAS[v.era].c; b.title = v.y + " " + v.t;
+    b.setAttribute("aria-label", v.y + "年 " + v.t);
+    b.onclick = function () { curEv = i; curEra = v.era; draw(); };
+    axis.appendChild(b);
+  });
+  [1950, 1970, 1990, 2010, 2025].forEach(function (y) {
+    var s = document.createElement("span"); s.className = "yr"; s.textContent = y; s.style.left = X(y) + "%"; axis.appendChild(s);
+  });
+  function go(d) { curEv = Math.max(0, Math.min(EVENTS.length - 1, curEv + d)); curEra = EVENTS[curEv].era; draw(); }
+  document.getElementById("prev").onclick = function () { go(-1); };
+  document.getElementById("next").onclick = function () { go(1); };
+
+  function draw() {
+    var e = ERAS[curEra], v = EVENTS[curEv];
+    erasEl.querySelectorAll(".era").forEach(function (b, i) { b.classList.toggle("on", i === curEra); });
+    axis.querySelectorAll(".ev").forEach(function (b, i) { b.classList.toggle("on", i === curEv); });
+    document.getElementById("pos").textContent = "第 " + (curEv + 1) + " / " + EVENTS.length + " 个事件";
+    var ec = document.getElementById("evcard");
+    ec.style.setProperty("--c", ERAS[v.era].c); ec.style.setProperty("--cbg", "#fafafa");
+    ec.innerHTML = "<h2>" + v.y + " 年 · " + v.t + "</h2>" + v.d;
+    var c = document.getElementById("eracard");
+    c.style.setProperty("--c", e.c); c.style.setProperty("--cbg", e.bg);
+    c.innerHTML = "<h2>" + e.name + "（" + e.years + "）</h2>" + e.idea +
+      "<dl class='who'><dt>人要做什么</dt><dd>" + e.human + "</dd><dt>机器做什么</dt><dd>" + e.machine +
+      "</dd><dt>成就</dt><dd>" + e.good + "</dd><dt>局限</dt><dd>" + e.bad + "</dd></dl>" +
+      "<div class='cat'><b>小问题：怎样认出一只猫？</b><br>" + e.cat + "</div>";
+  }
+  draw();
+})();
+</script>
+<script src="../common/sim.js"></script>
+</body>
+</html>
