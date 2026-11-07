@@ -20,6 +20,7 @@ lab_section: 在线体验
 lab_word: 体验
 frontier_title: 前沿视窗
 certificates: []
+series: 全校通识课网络教材
 
 chapters:
   - dir: 01-ai-intro

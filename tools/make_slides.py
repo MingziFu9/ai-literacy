@@ -412,7 +412,7 @@ class Deck:
         add_rich(tf.paragraphs[0], f"《{self.c['title']}》", 22, "FFFFFF")
         add_rich(tf.add_paragraph(), info, 16, "C5CAE9")
         tf = box(s, MARGIN, H - Inches(0.9), W - 2 * MARGIN, Inches(0.5))
-        add_rich(tf.paragraphs[0], "人工智能技术应用专业系列网络教材 · " + site_url(self.c), 12, "C5CAE9")
+        add_rich(tf.paragraphs[0], self.c.get("series", "人工智能技术应用专业系列网络教材") + " · " + site_url(self.c), 12, "C5CAE9")
 
     def section_slide(self, title):
         s = self.new()
